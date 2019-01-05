@@ -33,10 +33,10 @@ int tap_alloc(char *dev)
 	if(*dev)
 		strncpy(ifr.ifr_name, dev, IFNAMSIZ);
 
-	if((err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0){
+	if(ioctl(fd, TUNSETIFF, (void *) &ifr) < 0){
 		close(fd);
 		perror("ioctl failed");
-		return err;
+		return -1;
 	}
 
 	strcpy(dev, ifr.ifr_name);
@@ -45,6 +45,10 @@ int tap_alloc(char *dev)
 
 
 struct netdev *init_tap_device(char *dev) {
+	int sock_fd = tap_alloc(dev);
+	if(sock_fd < 0)
+		return NULL;
+
 	// file descriptor
 	device = malloc(sizeof(struct netdev));
 	if(device == NULL) {
@@ -52,7 +56,7 @@ struct netdev *init_tap_device(char *dev) {
 		exit(1);
 	}
 
-	device->sock_fd = (uint32_t)tap_alloc(dev);
+	device->sock_fd = sock_fd;
 
 	// HW address
 	for(int i = 0; i < 6; i++)
@@ -65,6 +69,7 @@ struct netdev *init_tap_device(char *dev) {
 }
 
 void free_tap_device() {
+	close((int)device->sock_fd);
 	free(device);
 }
 

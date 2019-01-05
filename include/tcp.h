@@ -122,7 +122,8 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame);
 int tcp_send_packet(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
 struct sk_buff *tcp_create_buffer(uint16_t payload_size);
 int tcp_set_options(struct sk_buff *buffer, struct tcp_options* opts);
-void tcp_timer_slow();
+void *tcp_timer_slow();
+void *tcp_timer_fast();
 
 
 void tcp_socket_free(struct tcp_socket *tcp_sck);

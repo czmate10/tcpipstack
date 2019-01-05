@@ -7,7 +7,7 @@
 
 
 struct netdev {
-	uint32_t sock_fd;
+	int sock_fd;
 	uint8_t hwaddr[6];
 	uint32_t ipv4;
 	uint64_t ipv6[2];

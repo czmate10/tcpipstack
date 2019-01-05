@@ -1,5 +1,6 @@
 #include "tcp.h"
 
+extern int RUNNING;
 
 uint16_t tcp_checksum(struct tcp_packet *tcp_pck, uint16_t tcp_len, uint32_t source_ip, uint32_t dest_ip) {
 	// We need to include the pseudo-header in the checksum.
@@ -12,10 +13,19 @@ uint16_t tcp_checksum(struct tcp_packet *tcp_pck, uint16_t tcp_len, uint32_t sou
 	return checksum((uint16_t *)tcp_pck, (uint32_t) (tcp_len), sum);
 }
 
-void tcp_timer_slow() {
-
+void *tcp_timer_slow() {
+	while(RUNNING) {
+		usleep(500000);
+	}
+	return NULL;
 }
 
+void *tcp_timer_fast() {
+	while(RUNNING) {
+		usleep(200000);
+	}
+	return NULL;
+}
 
 void tcp_socket_free(struct tcp_socket *tcp_sck) {
 	if(tcp_sck == tcp_sockets_head) {
