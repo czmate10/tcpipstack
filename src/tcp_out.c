@@ -33,7 +33,7 @@ struct sk_buff *tcp_create_buffer(uint16_t payload_size) {
 	struct sk_buff *buffer = tcp_alloc(payload_size);
 	struct tcp_packet *tcp_pck = tcp_packet_from_skb(buffer);
 
-	tcp_pck->data_offset = TCP_HEADER_SIZE / 4;
+	tcp_pck->data_offset = TCP_HEADER_SIZE >> 2;
 
 	return buffer;
 }
@@ -50,6 +50,6 @@ int tcp_set_options(struct sk_buff *buffer, struct tcp_options* opts) {
 		header_len += 1;
 	}
 
-	tcp_pck->data_offset = (sizeof(struct tcp_packet) / 4) + header_len;
+	tcp_pck->data_offset = (sizeof(struct tcp_packet) >> 2) + header_len;
 	return 0;
 }

@@ -18,7 +18,7 @@ int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer) {
 	ip_pck->protocol = sock->protocol;
 	ip_pck->id = rand();  // TODO: do better than this
 	ip_pck->len = htons(packet_size);
-	ip_pck->header_len = (uint8_t)(IP_HEADER_SIZE / 4);
+	ip_pck->header_len = (uint8_t)(IP_HEADER_SIZE >> 2);
 	ip_pck->fragment_offset = htons(16384);
 	ip_pck->tos = 0;
 	ip_pck->ttl = IP_DEFAULT_TTL;
@@ -29,7 +29,7 @@ int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer) {
 	ip_pck->checksum = 0;
 	ip_pck->checksum = checksum((uint16_t *) ip_pck, IP_HEADER_SIZE, 0);
 
-	uint8_t dest_mac[] = {0x82, 0x24, 0x23, 0x99, 0xbd, 0x7d};  // TODO: lookup in ARP list
+	uint8_t dest_mac[] = {0x82, 0xa3, 0x4f, 0xa8, 0x3b, 0x71};  // TODO: lookup in ARP list
 	return eth_write(sock->dev, dest_mac, ETH_P_IP, buffer);
 }
 

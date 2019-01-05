@@ -12,8 +12,6 @@
 #include "tap.h"
 
 
-struct netdev *device;
-
 int tap_alloc(char *dev)
 {
 	struct ifreq ifr;
@@ -57,11 +55,11 @@ struct netdev *init_tap_device(char *dev) {
 	device->sock_fd = (uint32_t)tap_alloc(dev);
 
 	// HW address
-	uint8_t hwaddr[] = {0x00, 0x50, 0x56, 0xf1, 0xc4, 0x10};
-	memcpy(device->hwaddr, hwaddr, sizeof(device->hwaddr));
+	for(int i = 0; i < 6; i++)
+		sscanf(&TAP_DEVICE_MAC[i*3], "%2hhx", &device->hwaddr[i]);
 
 	// IPv4 address
-	inet_pton(AF_INET, "10.0.0.6", &device->ipv4);
+	inet_pton(AF_INET, TAP_DEVICE_IP, &device->ipv4);
 
 	return device;
 }

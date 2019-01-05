@@ -8,12 +8,18 @@
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <time.h>
+#include <pthread.h>
+#include <sys/poll.h>
 
 #include "tap.h"
 #include "eth.h"
 #include "arp.h"
 #include "ipv4.h"
 #include "tcp.h"
+
+
+int RUNNING = 1;
+struct netdev* device = NULL;
 
 
 int handle_eth_packet(struct netdev* dev, struct eth_frame *eth_frame) {
@@ -34,30 +40,49 @@ int handle_eth_packet(struct netdev* dev, struct eth_frame *eth_frame) {
 	}
 }
 
-
-int main() {
-	// Variables
-	char dev_name[IFNAMSIZ];
-	strcpy(dev_name, "tap0");
-
-	// Setup internal stuff
-	struct netdev* dev = init_tap_device(dev_name);
-
-	printf("Using TAP device %s\n\n", dev_name);
-
+void *main_loop(void *params) {
 	// Read packets
-	while(1) {
+	while(RUNNING) {
 		struct eth_frame *eth_frame = malloc(ETHERNET_MAX_SIZE);
 		if(eth_frame == NULL) {
 			perror("could not allocate memory for ethernet packet");
 			exit(1);
 		}
 
-		uint16_t num_bytes = eth_read(dev, eth_frame);
-		handle_eth_packet(dev, eth_frame);
+		uint16_t num_bytes = eth_read(device, eth_frame);
+		handle_eth_packet(device, eth_frame);
 
 		free(eth_frame);
 	}
+	return NULL;
+}
 
+void setup() {
+	// TAP device
+	char dev_name[IFNAMSIZ];
+	strcpy(dev_name, "tap0");
+	device = init_tap_device(dev_name);
+	printf("Using TAP device %s\n\n", dev_name);
+}
+
+void finish() {
 	free_tap_device();
+}
+
+int main() {
+	setup();
+
+	pthread_t main_thread;
+	int result = pthread_create(&main_thread, NULL, main_loop, NULL);
+	if(result != 0) {
+		perror("Failed to create thread");
+		exit(1);
+	}
+
+	getchar();
+	printf("Shutting down...\n");
+
+	RUNNING = 0;
+	pthread_join(main_thread, NULL);
+	finish();
 }

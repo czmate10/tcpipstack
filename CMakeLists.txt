@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
-project(tcpstack C)
-include_directories(include)
-
+project(tcpipstack C)
 set(CMAKE_C_STANDARD 11)
 
+include_directories(include)
 
-add_executable(learnc
+add_executable(tcpipstack
         src/main.c
         src/utils.c
         src/skbuff.c
@@ -17,3 +16,8 @@ add_executable(learnc
         src/tcp.c
         src/tcp_out.c
         src/tcp_in.c)
+
+# pthread
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(tcpipstack Threads::Threads)

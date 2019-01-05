@@ -83,7 +83,7 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 		exit(1);
 	}
 
-	uint8_t options_size = (uint8_t) ((tcp_pck->data_offset - 5) * 4);
+	uint8_t options_size = (uint8_t) ((tcp_pck->data_offset - 5) << 4);
 	if(options_size > 0)
 		tcp_parse_options(opts, tcp_pck->data, options_size);
 	else
@@ -194,4 +194,3 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 free(opts);
 return 0;
 }
-#pragma clang diagnostic pop
