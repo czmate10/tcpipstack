@@ -22,9 +22,18 @@ void *tcp_timer_slow() {
 
 void *tcp_timer_fast() {
 	while(RUNNING) {
+		struct tcp_socket *tcp_sck = tcp_sockets_head;
+		do {
+
+		} while(tcp_sck != tcp_sockets_head);
 		usleep(200000);
 	}
 	return NULL;
+}
+
+void tcp_socket_wait_2msl(struct tcp_socket *tcp_sck) {
+	// TODO: actually wait 2msl
+	tcp_socket_free(tcp_sck);
 }
 
 void tcp_socket_free(struct tcp_socket *tcp_sck) {
@@ -52,8 +61,13 @@ struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t
 		perror("could not allocate memory for TCP socket");
 		exit(1);
 	}
-
 	memset(tcp_sck, 0, sizeof(struct tcp_socket));
+
+	tcp_sck->state = TCPS_CLOSED;
+	tcp_sck->iss = (uint32_t)lrand48();
+	tcp_sck->snd_nxt = tcp_sck->iss;
+	tcp_sck->snd_una = tcp_sck->iss;
+	tcp_sck->rcv_wnd = TCP_START_WINDOW_SIZE;
 
 	tcp_sck->sock.protocol = IPPROTO_TCP;
 	tcp_sck->sock.source_ip = source_ip;

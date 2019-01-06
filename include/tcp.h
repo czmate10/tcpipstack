@@ -12,7 +12,9 @@
 
 
 #define TCP_HEADER_SIZE 20
+#define TCP_OPTS_MAXLEN 32
 #define TCP_DEFAULT_MSS 536
+#define TCP_START_WINDOW_SIZE 29200
 
 #define TCP_OPTIONS_END 0
 #define TCP_OPTIONS_NOOP 1
@@ -27,7 +29,7 @@
 // Timers
 #define TCP_T_SLOW_INTERVAL 500  // slow timer should run every 500ms
 #define TCP_T_FAST_INTERVAL 100  // fast timer should run every 100ms, TODO: delayed ack timer
-#define TCP_T_COUNT 4  // four different timers
+#define TCP_T_COUNT 4  // four timers
 
 #define TCP_T_RETRANSMISSION 0
 #define TCP_T_PERSIST 1
@@ -48,19 +50,18 @@
 
 
 enum tcp_state {
-	CLOSED,
-	LISTEN,
-	SYN_RCVD,
-	SYN_SENT,
-	ESTABLISHED,
-	CLOSE_WAIT,
-	LAST_ACK,
-	FIN_WAIT1,
-	FIN_WAIT2,
-	CLOSING,
-	TIME_WAIT
+	TCPS_CLOSED,
+	TCPS_LISTEN,
+	TCPS_SYN_SENT,
+	TCPS_SYN_RCVD,
+	TCPS_ESTABLISHED,
+	TCPS_CLOSE_WAIT,
+	TCPS_FIN_WAIT1,
+	TCPS_CLOSING,
+	TCPS_LAST_ACK,
+	TCPS_FIN_WAIT2,
+	TCPS_TIME_WAIT
 };
-
 
 struct tcp_options {
 	uint16_t mss;
@@ -104,24 +105,48 @@ struct tcp_socket {
 	struct sock sock;
 	enum tcp_state state;
 	uint16_t mss;
-	uint32_t seq;
-	uint32_t ack_seq;
 	uint16_t timers[TCP_T_COUNT];
+
+	uint32_t snd_una;  // oldest unacknowledged sequence number
+	uint32_t snd_nxt;  // next sequence number to be sent
+	uint16_t snd_wnd;  // send window
+	uint32_t snd_wl1;  // segment sequence number used for last window update
+	uint32_t snd_wl2;  // segment acknowledgment number used for last window update
+	uint32_t iss;
+
+	uint32_t irs;  // initial received sequence number
+	uint32_t rcv_nxt;  // next sequence number expected on an incoming segments, and is the left or lower edge of the receive window
+	uint16_t rcv_wnd;  // receive window
+	uint32_t rcv_up;  // receive urgent pointer
 };
-
 struct tcp_socket *tcp_sockets_head;
-
 
 
 static inline struct tcp_packet *tcp_packet_from_skb(struct sk_buff *buff) {
 	return (struct tcp_packet *)(buff->data + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE);
 }
 
+static inline void tcp_packet_ntoh(struct tcp_packet *tcp_pck) {
+	tcp_pck->source_port = ntohs(tcp_pck->source_port);
+	tcp_pck->dest_port = ntohs(tcp_pck->dest_port);
+	tcp_pck->seq = ntohl(tcp_pck->seq);
+	tcp_pck->ack_seq = ntohl(tcp_pck->ack_seq);
+	tcp_pck->window_size = ntohs(tcp_pck->window_size);
+	tcp_pck->checksum = ntohs(tcp_pck->checksum);
+	tcp_pck->urg_pointer = ntohs(tcp_pck->urg_pointer);
+}
+
 uint16_t tcp_checksum(struct tcp_packet *tcp_pck, uint16_t tcp_len, uint32_t source_ip, uint32_t dest_ip);
 int tcp_process_packet(struct netdev *dev, struct eth_frame *frame);
-int tcp_send_packet(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
 struct sk_buff *tcp_create_buffer(uint16_t payload_size);
-int tcp_set_options(struct sk_buff *buffer, struct tcp_options* opts);
+
+
+void tcp_socket_wait_2msl(struct tcp_socket *tcp_sck);
+void tcp_out_ack(struct tcp_socket *tcp_sock);
+void tcp_out_syn(struct tcp_socket *tcp_sock);
+void tcp_out_synack(struct tcp_socket *tcp_sock);
+void tcp_out_rst(struct tcp_socket *tcp_sock);
+void tcp_out_rstack(struct tcp_socket *tcp_sock);
 void *tcp_timer_slow();
 void *tcp_timer_fast();
 

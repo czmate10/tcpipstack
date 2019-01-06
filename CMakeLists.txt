@@ -17,6 +17,9 @@ add_executable(tcpipstack
         src/tcp_out.c
         src/tcp_in.c)
 
+# C11
+set_property(TARGET tcpipstack PROPERTY C_STANDARD 11)
+
 # pthread
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

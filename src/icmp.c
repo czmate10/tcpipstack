@@ -11,7 +11,14 @@ int icmp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 
 	uint32_t icmp_packet_size = ip_pck->len - (ip_pck->header_len * (uint16_t) 4);
 
-	icmp_pck->checksum = ntohs(icmp_pck->checksum);
+	uint16_t checksum_orig = icmp_pck->checksum;
+	icmp_pck->checksum = 0;
+	uint16_t checksum_actual = checksum((uint16_t *)icmp_pck, icmp_packet_size, 0);
+
+	if(checksum_orig != checksum_actual) {
+		fprintf(stderr, "wrong checksum for ICMP packet");
+		return -1;
+	}
 
 	struct sock socket;
 	socket.source_ip = ip_pck->dest_ip;
@@ -32,7 +39,7 @@ int icmp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 		memcpy(icmp_pck_resp->data, icmp_pck->data, icmp_packet_size - sizeof(struct icmp_v4_packet));
 
 		// Calculate checksum
-		icmp_pck_resp->checksum = checksum((uint16_t *) icmp_pck, icmp_packet_size, 0);
+		icmp_pck_resp->checksum = checksum((uint16_t *)icmp_pck_resp, icmp_packet_size, 0);
 
 		return ipv4_send_packet(&socket, buffer);
 	}

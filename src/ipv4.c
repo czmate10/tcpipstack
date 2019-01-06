@@ -29,7 +29,8 @@ int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer) {
 	ip_pck->checksum = 0;
 	ip_pck->checksum = checksum((uint16_t *) ip_pck, IP_HEADER_SIZE, 0);
 
-	uint8_t dest_mac[] = {0x82, 0xa3, 0x4f, 0xa8, 0x3b, 0x71};  // TODO: lookup in ARP list
+	// 4a:6e:c9:7a:f3:d7
+	uint8_t dest_mac[] = {0x4a, 0x6e, 0xc9, 0x7a, 0xf3, 0xd7};  // TODO: lookup in ARP list
 	return eth_write(sock->dev, dest_mac, ETH_P_IP, buffer);
 }
 
