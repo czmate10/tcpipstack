@@ -7,7 +7,7 @@
 
 struct sock {
 	uint8_t protocol;  // TCP, UDP?
-	struct netdev *dev;
+	struct net_dev *dev;
 
 	uint32_t source_ip;
 	uint32_t dest_ip;

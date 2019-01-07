@@ -44,5 +44,5 @@ struct arp_entry arp_cache[ARP_CACHE_SIZE];
 void arp_free_caches();
 struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address);
 int arp_add_entry_ipv4(struct arp_packet *packet, struct arp_payload* payload);
-int arp_send_reply(struct netdev* dev, struct eth_frame *eth_frame);
-int arp_process_packet(struct netdev *dev, struct eth_frame *eth_frame);
+int arp_send_reply(struct net_dev* dev, struct eth_frame *eth_frame);
+int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame);

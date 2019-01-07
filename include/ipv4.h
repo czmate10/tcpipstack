@@ -34,5 +34,5 @@ static inline struct ipv4_packet *ipv4_packet_from_skb(struct sk_buff *buff) {
 	return (struct ipv4_packet *)(buff->data + ETHERNET_HEADER_SIZE);
 }
 
-int ipv4_process_packet(struct netdev *dev, struct eth_frame *frame);
+int ipv4_process_packet(struct net_dev *dev, struct eth_frame *frame);
 int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer);

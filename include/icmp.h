@@ -18,7 +18,7 @@ struct icmp_v4_echo_request {
 	uint8_t data[];
 };
 
-int icmp_process_packet(struct netdev *dev, struct eth_frame *frame);
+int icmp_process_packet(struct net_dev *dev, struct eth_frame *frame);
 
 
 static inline struct icmp_v4_packet *icmp_v4_packet_from_skb(struct sk_buff *buff) {

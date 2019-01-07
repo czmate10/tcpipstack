@@ -10,6 +10,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <poll.h>
+#include <errno.h>
 
 #include "tap.h"
 #include "eth.h"
@@ -27,11 +28,11 @@
 
 
 int RUNNING = 1;
-struct netdev* device = NULL;
+struct net_dev* device = NULL;
 pthread_t threads[THREAD_COUNT];
 
 
-int handle_eth_packet(struct netdev* dev, struct eth_frame *eth_frame) {
+int handle_eth_frame(struct net_dev *dev, struct eth_frame *eth_frame) {
 	if(eth_frame->eth_type == ETH_P_ARP) {
 		return arp_process_packet(dev, eth_frame);
 	}
@@ -63,12 +64,12 @@ void *main_loop() {
 		if(poll_fd.revents & POLLIN) {
 			struct eth_frame *eth_frame = malloc(ETHERNET_MAX_SIZE);
 			if(eth_frame == NULL) {
-				perror("could not allocate memory for ethernet packet");
+				perror("could not allocate memory for ethernet frame");
 				exit(1);
 			}
 
 			uint16_t num_bytes = eth_read(device, eth_frame);
-			handle_eth_packet(device, eth_frame);
+			handle_eth_frame(device, eth_frame);
 
 			free(eth_frame);
 		}
@@ -77,6 +78,15 @@ void *main_loop() {
 	}
 
 	return NULL;
+}
+
+void create_thread(int id, void *(*func) (void *) ) {
+	int res = pthread_create(&threads[id], NULL, func, NULL);
+	if(res != 0) {
+		fprintf(stderr, "failed to create thread #%d: %s", id, strerror(errno));
+		perror("Failed to create thread");
+		exit(1);
+	}
 }
 
 void setup() {
@@ -91,23 +101,9 @@ void setup() {
 	printf("Using TAP device %s\n", dev_name);
 
 	// Main thread
-	int result = pthread_create(&threads[THREAD_MAIN], NULL, main_loop, NULL);
-	if(result != 0) {
-		perror("Failed to create main thread");
-		exit(1);
-	}
-	// TCP slow thread
-	result = pthread_create(&threads[THREAD_TCP_SLOW], NULL, tcp_timer_slow, NULL);
-	if(result != 0) {
-		perror("Failed to create TCP slow thread");
-		exit(1);
-	}
-	// TCP fast thread
-	result = pthread_create(&threads[THREAD_TCP_FAST], NULL, tcp_timer_fast, NULL);
-	if(result != 0) {
-		perror("Failed to create TCP fast thread");
-		exit(1);
-	}
+	create_thread(THREAD_MAIN, main_loop);
+	create_thread(THREAD_TCP_SLOW, tcp_timer_slow);
+	create_thread(THREAD_TCP_FAST, tcp_timer_fast);
 
 	printf("Created threads\n\n");
 }
@@ -129,7 +125,7 @@ struct tcp_socket * setup_test_socket() {
 	uint16_t port = (uint16_t)lrand48();
 	printf("Using port %u\n\n", port);
 
-	struct tcp_socket *socket = tcp_socket_new(device->ipv4, dest_ip, port, 85);
+	struct tcp_socket *socket = tcp_socket_new(device->ipv4, dest_ip, port, 86);
 	socket->sock.dev = device;
 	socket->mss = 1460;
 	tcp_out_syn(socket);

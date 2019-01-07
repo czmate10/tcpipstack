@@ -44,13 +44,13 @@ int tap_alloc(char *dev)
 }
 
 
-struct netdev *init_tap_device(char *dev) {
+struct net_dev *init_tap_device(char *dev) {
 	int sock_fd = tap_alloc(dev);
 	if(sock_fd < 0)
 		return NULL;
 
 	// file descriptor
-	device = malloc(sizeof(struct netdev));
+	device = malloc(sizeof(struct net_dev));
 	if(device == NULL) {
 		perror("could not allocate memory for TAP device");
 		exit(1);
@@ -73,6 +73,6 @@ void free_tap_device() {
 	free(device);
 }
 
-struct netdev *get_tap_device() {
+struct net_dev *get_tap_device() {
 	return device;
 }

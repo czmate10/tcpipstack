@@ -13,65 +13,71 @@ void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
 
 	uint8_t* ptr = data;
 	while(ptr < data + size) {
-		if (*ptr == TCP_OPTIONS_END) {
-			break;
-		}
+		uint8_t kind = *ptr;
+		switch(kind) {
+			case TCP_OPTIONS_END:
+				return;
 
-		else if(*ptr == TCP_OPTIONS_NOOP) {
-			ptr++;
-		}
+			case TCP_OPTIONS_NOOP:
+				ptr++;
+				break;
 
-		else if(*ptr == TCP_OPTIONS_MSS) {
-			struct tcp_options_mss* mss = (struct tcp_options_mss*)ptr;
-			opts->mss = ntohs(mss->value);
-			ptr += sizeof(struct tcp_options_mss);
-		}
+			case TCP_OPTIONS_MSS: {
+				struct tcp_options_mss *mss = (struct tcp_options_mss *) ptr;
+				opts->mss = ntohs(mss->value);
+				ptr += sizeof(struct tcp_options_mss);
+				break;
+			}
 
-		else if(*ptr == TCP_OPTIONS_WSCALE) {
-			struct tcp_options_wscale* wscale = (struct tcp_options_wscale*)ptr;
-			opts->window_scale = wscale->value;
-			ptr += sizeof(struct tcp_options_wscale);
-		}
+			case TCP_OPTIONS_WSCALE: {
+				struct tcp_options_wscale *wscale = (struct tcp_options_wscale *) ptr;
+				opts->window_scale = wscale->value;
+				ptr += sizeof(struct tcp_options_wscale);
+				break;
+			}
 
-		else if(*ptr == TCP_OPTIONS_SACK_PERMITTED) {
-			opts->sack_permitted = 1;
-			ptr += 2;
-		}
+			case TCP_OPTIONS_SACK: {
+				// TODO
+				fprintf(stderr, "sack not implemented");
+				exit(1);
+			}
 
-		else if(*ptr == TCP_OPTIONS_SACK) {
-			// TODO
-			fprintf(stderr, "sack not implemented");
-			exit(1);
-		}
+			case TCP_OPTIONS_TIMESTAMP: {
+				struct tcp_options_timestamp *ts = (struct tcp_options_timestamp *) ptr;
+				opts->timestamp = ntohl(ts->timestamp);
+				opts->echo = ntohl(ts->echo);
+				ptr += sizeof(struct tcp_options_timestamp);
+				break;
+			}
 
-		else if(*ptr == TCP_OPTIONS_TIMESTAMP) {
-			struct tcp_options_timestamp* ts = (struct tcp_options_timestamp*)ptr;
-			opts->timestamp = ntohl(ts->timestamp);
-			opts->echo = ntohl(ts->echo);
-			ptr += sizeof(struct tcp_options_timestamp);
-		}
+			case TCP_OPTIONS_SACK_PERMITTED: {
+				opts->sack_permitted = 1;
+				ptr += 2;
+				break;
+			}
 
-		else {
-			fprintf(stderr, "unknown TCP option encountered: %d, size: %d", *ptr, size);
-			exit(1);
+			default: {
+				fprintf(stderr, "unknown TCP option encountered: %d, size: %d", *ptr, size);
+				exit(1);
+			}
 		}
 	}
 }
 
-void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_packet *tcp_pck, struct tcp_options *opts) {
+void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 	// 1: check ACK
-	if(tcp_pck->ack) {
-		if (tcp_pck->ack_seq <= socket->iss || tcp_pck->ack_seq > socket->snd_nxt) {
+	if(tcp_segment->ack) {
+		if (tcp_segment->ack_seq <= socket->iss || tcp_segment->ack_seq > socket->snd_nxt) {
 			return; // TODO: check RST flag
 		}
 
-		if (tcp_pck->ack_seq < socket->snd_una || tcp_pck->ack_seq > socket->snd_nxt) {
+		if (tcp_segment->ack_seq < socket->snd_una || tcp_segment->ack_seq > socket->snd_nxt) {
 			return;
 		}
 	}
 
 	// 2: check RST bit
-	if (tcp_pck->rst) {
+	if (tcp_segment->rst) {
 		fprintf(stderr, "error: connection reset");
 		tcp_socket_free(socket);
 		return;
@@ -80,11 +86,11 @@ void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_packet *tcp_pck,
 	// TODO: 3: check security
 
 	// 4: check the SYN bit
-	if(tcp_pck->syn) {
-		socket->rcv_nxt = tcp_pck->seq + 1;
-		socket->irs = tcp_pck->seq;
-		if(tcp_pck->ack) {
-			socket->snd_una = tcp_pck->ack_seq;
+	if(tcp_segment->syn) {
+		socket->rcv_nxt = tcp_segment->seq + 1;
+		socket->irs = tcp_segment->seq;
+		if(tcp_segment->ack) {
+			socket->snd_una = tcp_segment->ack_seq;
 			// TODO:  any segments on the retransmission queue which
 			//        are thereby acknowledged should be removed.
 		}
@@ -103,122 +109,116 @@ void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_packet *tcp_pck,
 	}
 }
 
-void tcp_process_listen(struct tcp_socket *socket, struct tcp_packet *tcp_pck, struct tcp_options *opts) {
+void tcp_process_listen(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 }
 
-void tcp_process_closed(struct tcp_socket *socket, struct tcp_packet *tcp_pck, struct tcp_options *opts, uint16_t tcp_segment_size) {
-	if(tcp_pck->rst)
+void tcp_process_closed(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts, uint16_t tcp_segment_size) {
+	if(tcp_segment->rst)
 		return;
 
 	// Send RST
-	if(tcp_pck->ack) {
-		socket->snd_nxt = tcp_pck->ack_seq;
+	if(tcp_segment->ack) {
+		socket->snd_nxt = tcp_segment->ack_seq;
 		tcp_out_rst(socket);
 	}
 	else {
-		socket->rcv_nxt = tcp_pck->seq + tcp_segment_size;
+		socket->rcv_nxt = tcp_segment->seq + tcp_segment_size;
 		socket->snd_nxt = 0;
 		tcp_out_rstack(socket);
 	}
 }
 
-int tcp_accept_test(struct tcp_socket *socket, struct tcp_packet *tcp_pck, uint16_t tcp_segment_size) {
+int tcp_accept_test(struct tcp_socket *socket, struct tcp_segment *tcp_segment, uint16_t tcp_segment_size) {
 	if(tcp_segment_size == 0 && socket->rcv_wnd == 0) {
-		return tcp_pck->seq == socket->rcv_nxt;
+		return tcp_segment->seq == socket->rcv_nxt;
 	}
 
 	else if(tcp_segment_size == 0 && socket->rcv_wnd > 0)
-		return socket->rcv_nxt <= tcp_pck->seq < (socket->rcv_nxt + socket->rcv_wnd);
+		return socket->rcv_nxt <= tcp_segment->seq < (socket->rcv_nxt + socket->rcv_wnd);
 
 	else if(tcp_segment_size > 0 && socket->rcv_wnd == 0)
 		return 0;
 
 	else if(tcp_segment_size > 0 && socket->rcv_wnd > 0)
-		return ((socket->rcv_nxt <= tcp_pck->seq < socket->rcv_nxt+socket->rcv_wnd) ||
-				(socket->rcv_nxt <= tcp_pck->seq + tcp_segment_size - 1 < socket->rcv_nxt+socket->rcv_wnd));
+		return ((socket->rcv_nxt <= tcp_segment->seq < socket->rcv_nxt+socket->rcv_wnd) ||
+				(socket->rcv_nxt <= tcp_segment->seq + tcp_segment_size - 1 < socket->rcv_nxt+socket->rcv_wnd));
 
 	return 0;
 }
 
-uint8_t tcp_process_options(struct tcp_packet *tcp_pck, struct tcp_options **opts) {
-	*opts = calloc(0, sizeof(struct tcp_options));
-	if (*opts == NULL) {
-		perror("could not allocate memory for TCP options");
-		exit(1);
-	}
-
-	uint8_t options_size = (uint8_t) ((tcp_pck->data_offset - 5) << 4);
+uint8_t tcp_process_options(struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 4);
 	if (options_size > 0)
-		tcp_parse_options(*opts, tcp_pck->data, options_size);
+		tcp_parse_options(opts, tcp_segment->data, options_size);
 	else
-		(*opts)->mss = TCP_DEFAULT_MSS;
+		opts->mss = TCP_DEFAULT_MSS;
 
 	return options_size;
 }
 
-int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
-	struct ipv4_packet *ip_pck = (struct ipv4_packet *) frame->payload;
-	struct tcp_packet *tcp_pck = (struct tcp_packet *) (ip_pck->data +
-														((ip_pck->header_len * 4) - sizeof(struct ipv4_packet)));
+void tcp_process_segment(struct net_dev *dev, struct eth_frame *frame) {
+	struct ipv4_packet *ip_packet = (struct ipv4_packet *) frame->payload;
+	struct tcp_segment *tcp_segment = (struct tcp_segment *) (ip_packet->data +
+														((ip_packet->header_len * 4) - sizeof(struct ipv4_packet)));
 
-	uint16_t checksum = tcp_pck->checksum;
-	uint16_t tcp_packet_size = (uint16_t)(ip_pck->len - ip_pck->header_len * 4);
-	uint16_t tcp_segment_size = (uint16_t)(tcp_packet_size - TCP_HEADER_SIZE);
+	uint16_t checksum = tcp_segment->checksum;
+	uint16_t tcp_segment_size = (uint16_t)(ip_packet->len - ip_packet->header_len * 4);
+	uint16_t tcp_data_size = (uint16_t)(tcp_segment_size - TCP_HEADER_SIZE);
 
 	// Compare checksums
-	if (checksum != tcp_checksum(tcp_pck, tcp_packet_size, ip_pck->source_ip, ip_pck->dest_ip)) {
-		fprintf(stderr, "TCP packet has mismatching checksum!\n");
-		return -1;
+	if (checksum != tcp_checksum(tcp_segment, tcp_segment_size, ip_packet->source_ip, ip_packet->dest_ip)) {
+		fprintf(stderr, "TCP segment has mismatching checksum!\n");
+		return;
 	}
 
 	// ntoh
-	tcp_packet_ntoh(tcp_pck);
+	tcp_segment_ntoh(tcp_segment);
 
 	// Get socket
-	struct tcp_socket *socket = tcp_socket_get(ip_pck->dest_ip, ip_pck->source_ip, tcp_pck->dest_port,
-											   tcp_pck->source_port);
+	struct tcp_socket *socket = tcp_socket_get(ip_packet->dest_ip, ip_packet->source_ip, tcp_segment->dest_port,
+											   tcp_segment->source_port);
 	if (!socket || socket->state == TCPS_CLOSED) {
 		// TODO: If there is no RST flag present, send RST
-		printf("TCP packet dropped (no active connection): %d -> %d\n", tcp_pck->source_port, tcp_pck->dest_port);
-		return -1;
+		printf("TCP segment dropped (no active connection): %d -> %d\n", tcp_segment->source_port, tcp_segment->dest_port);
+		return;
 	}
 
 	// Debug print
 	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | WS %d | MSS %d\n",
-		   tcp_pck->source_port, tcp_pck->dest_port, tcp_pck->fin, tcp_pck->syn, tcp_pck->rst, tcp_pck->psh,
-		   tcp_pck->ack, tcp_pck->urg, tcp_pck->ece, tcp_pck->cwr, tcp_pck->seq, tcp_pck->window_size, socket->mss);
+		   tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
+		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, socket->mss);
 
 	// Get options
-	struct tcp_options *opts;
-	uint8_t options_size = tcp_process_options(tcp_pck, &opts);
+	struct tcp_options opts = {0};
+	uint8_t options_size = tcp_process_options(tcp_segment, &opts);
 
 
 	// First check if we are in one of these 3 states
 	if(socket->state == TCPS_SYN_SENT) {
-		tcp_process_syn_sent(socket, tcp_pck, opts);
-		return 0;
+		tcp_process_syn_sent(socket, tcp_segment, &opts);
+		return;
 	}
 	else if(socket->state == TCPS_LISTEN) {
-		tcp_process_listen(socket, tcp_pck, opts);
-		return 0;
+		tcp_process_listen(socket, tcp_segment, &opts);
+		return;
 	}
 	else if(socket->state == TCPS_CLOSED) {
-		tcp_process_closed(socket, tcp_pck, opts, tcp_packet_size);
-		return 0;
+		tcp_process_closed(socket, tcp_segment, &opts, tcp_segment_size);
+		return;
 	}
 
 	// 1: check sequence number
-	if(!tcp_accept_test(socket, tcp_pck, tcp_segment_size)) {
-		fprintf(stderr, "Invalid TCP ack sequence num: %u - sending RST\n", tcp_pck->ack_seq);
+	if(!tcp_accept_test(socket, tcp_segment, tcp_data_size)) {
+		fprintf(stderr, "Invalid TCP ack sequence num: %u - sending RST\n", tcp_segment->ack_seq);
 
-		if(!tcp_pck->rst)
+		if(!tcp_segment->rst)
 			tcp_out_ack(socket);
 
-		return -1;
+		return;
 	}
 
 	// 2: check the RST bit
-	if(tcp_pck->rst) {
+	if(tcp_segment->rst) {
 		switch(socket->state) {
 			case TCPS_SYN_RCVD:
 				// If passive open, set to LISTEN stage
@@ -226,7 +226,7 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 				fprintf(stderr, "connection refused\n");
 				socket->state = TCPS_CLOSED;  // or LISTEN if passive open
 				tcp_socket_free(socket);
-				return -1;
+				return;
 
 			case TCPS_ESTABLISHED:
 			case TCPS_FIN_WAIT1:
@@ -236,18 +236,18 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 				fprintf(stderr, "connection reset\n");
 				socket->state = TCPS_CLOSED;
 				tcp_socket_free(socket);
-				return -1;
+				return;
 
 			case TCPS_CLOSING:
 			case TCPS_LAST_ACK:
 			case TCPS_TIME_WAIT:
 				socket->state = TCPS_CLOSED;
 				tcp_socket_free(socket);
-				return -1;
+				return;
 
 			default:
 				fprintf(stderr, "unknown state for socket: %d\n", socket->state);
-				return -1;
+				return;
 		}
 	}
 
@@ -255,7 +255,7 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 	// -----------------
 
 	// 4: check the SYN bit
-	if(tcp_pck->syn) {
+	if(tcp_segment->syn) {
 		switch(socket->state) {
 			case TCPS_SYN_RCVD:
 			case TCPS_ESTABLISHED:
@@ -270,33 +270,33 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 				tcp_out_rst(socket);
 				socket->state = TCPS_CLOSED;
 				tcp_socket_free(socket);
-				return -1;
+				return;
 		}
 	}
 
 	// 5: check ACK field
-	if(!tcp_pck->ack)
-		return -1;
+	if(!tcp_segment->ack)
+		return;
 
 	switch(socket->state) {
 		case TCPS_TIME_WAIT:
 			tcp_out_ack(socket);
 			// TODO: restart 2MSL timer here
-			return 0;
+			return;
 
 		case TCPS_LAST_ACK:
 			// FIN acknowledged
 			tcp_socket_free(socket);
-			return 0;
+			return;
 
 		case TCPS_SYN_RCVD:
-			if(socket->snd_una <= tcp_pck->ack_seq <= socket->snd_nxt) {
+			if(socket->snd_una <= tcp_segment->ack_seq <= socket->snd_nxt) {
 				socket->state = TCPS_ESTABLISHED;
 				// Continue processing
 			}
 			else {
 				tcp_out_rst(socket);
-				return 0;
+				return;
 			}
 		case TCPS_FIN_WAIT1:
 			socket->state = TCPS_FIN_WAIT2;
@@ -306,21 +306,21 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 			socket->state = TCPS_TIME_WAIT;
 		case TCPS_CLOSE_WAIT:
 		case TCPS_ESTABLISHED:
-			if(socket->snd_una < tcp_pck->ack_seq <= socket->snd_nxt) {
-				socket->snd_una = tcp_pck->ack_seq;
+			if(socket->snd_una < tcp_segment->ack_seq <= socket->snd_nxt) {
+				socket->snd_una = tcp_segment->ack_seq;
 				// TODO: remove acknowledged segments in the buffer
 
 				// Set send window, but not if it's an old segment (snd_wl1, snd_wl2)
-				if(socket->snd_wl1 < tcp_pck->seq || (socket->snd_wl1 == tcp_pck->seq && socket->snd_wl2 <= tcp_pck->ack_seq)) {
-					socket->snd_wnd = tcp_pck->window_size;
-					socket->snd_wl1 = tcp_pck->seq;
-					socket->snd_wl2 = tcp_pck->ack_seq;
+				if(socket->snd_wl1 < tcp_segment->seq || (socket->snd_wl1 == tcp_segment->seq && socket->snd_wl2 <= tcp_segment->ack_seq)) {
+					socket->snd_wnd = tcp_segment->window_size;
+					socket->snd_wl1 = tcp_segment->seq;
+					socket->snd_wl2 = tcp_segment->ack_seq;
 				}
 			}
-			else if(tcp_pck->ack_seq > socket->snd_nxt) {
+			else if(tcp_segment->ack_seq > socket->snd_nxt) {
 				// Not yet sent
 				tcp_out_ack(socket);
-				return 0;
+				return;
 			}
 	}
 
@@ -331,11 +331,11 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 		case TCPS_ESTABLISHED:
 		case TCPS_FIN_WAIT1:
 		case TCPS_FIN_WAIT2: {
-			uint16_t payload_size = ip_pck->len - sizeof(struct ipv4_packet) - sizeof(struct tcp_packet) - options_size;
+			uint16_t payload_size = ip_packet->len - sizeof(struct ipv4_packet) - sizeof(struct tcp_segment) - options_size;
 
-			if (tcp_pck->psh && payload_size > 0) {
+			if (tcp_segment->psh && payload_size > 0) {
 				// Get payload
-				uint8_t *payload = tcp_pck->data + options_size;
+				uint8_t *payload = tcp_segment->data + options_size;
 
 				// Set rcv_next
 				socket->rcv_nxt += payload_size;
@@ -359,23 +359,23 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 
 		default:
 			fprintf(stderr, "unknown state for socket: %d\n", socket->state);
-			return -1;
+			return;
 	}
 
 	// 8: check FIN bit
-	if(tcp_pck->fin) {
+	if(tcp_segment->fin) {
 		switch (socket->state) {
 			case TCPS_CLOSED:
 			case TCPS_LISTEN:
 			case TCPS_SYN_SENT:
 				// SEG.SEQ cannot be validated; drop the segment
-				return 0;
+				return;
 
 			case TCPS_SYN_RCVD:
 			case TCPS_ESTABLISHED:
 				printf("TCP :: closing connection\n");
 
-				socket->rcv_nxt = tcp_pck->seq+1;
+				socket->rcv_nxt = tcp_segment->seq+1;
 				tcp_out_ack(socket);
 
 				socket->state = TCPS_CLOSE_WAIT;
@@ -400,6 +400,4 @@ int tcp_process_packet(struct netdev *dev, struct eth_frame *frame) {
 				break;
 		}
 	}
-
-	return 0;
 }

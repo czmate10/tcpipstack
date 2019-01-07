@@ -7,7 +7,7 @@ struct sk_buff {
 	struct sk_buff *next;
 	struct sk_buff *prev;
 
-	struct netdev* dev;
+	struct net_dev* dev;
 
 	uint32_t size;
 	uint8_t *data;
