@@ -127,7 +127,7 @@ static inline void tcp_segment_ntoh(struct tcp_segment *tcp_segment) {
 }
 
 uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip);
-void tcp_process_segment(struct net_dev *dev, struct eth_frame *frame);
+void tcp_in(struct eth_frame *frame);
 struct sk_buff *tcp_create_buffer(uint16_t payload_size);
 
 

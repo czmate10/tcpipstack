@@ -61,7 +61,7 @@ int ipv4_process_packet(struct net_dev *dev, struct eth_frame *frame) {
 		icmp_process_packet(dev, frame);
 	}
 	else if(ip_packet->protocol == IPPROTO_TCP) {
-		tcp_process_segment(dev, frame);
+		tcp_in(frame);
 	}
 	else if(ip_packet->protocol == IPPROTO_UDP) {
 		return -1;

@@ -8,15 +8,19 @@
 #include "utils.h"
 
 
-void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
-	opts->mss = TCP_DEFAULT_MSS; // Default
+uint8_t tcp_in_options(struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 4);
+	if (options_size == 0) {
+		opts->mss = TCP_DEFAULT_MSS; // Default
+		return options_size;
+	}
 
-	uint8_t* ptr = data;
-	while(ptr < data + size) {
+	uint8_t* ptr = tcp_segment->data;
+	while(ptr < tcp_segment->data + options_size) {
 		uint8_t kind = *ptr;
 		switch(kind) {
 			case TCP_OPTIONS_END:
-				return;
+				return options_size;
 
 			case TCP_OPTIONS_NOOP:
 				ptr++;
@@ -36,7 +40,7 @@ void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
 
 			case TCP_OPTIONS_SACK: {
 				// TODO
-				fprintf(stderr, "sack not implemented");
+				fprintf(stderr, "sack not implemented\n");
 				exit(1);
 			}
 
@@ -54,14 +58,16 @@ void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
 			}
 
 			default: {
-				fprintf(stderr, "unknown TCP option encountered: %d, size: %d", *ptr, size);
+				fprintf(stderr, "unknown TCP option encountered: %d, size: %d\n", *ptr, options_size);
 				exit(1);
 			}
 		}
 	}
+
+	return options_size;
 }
 
-void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+void tcp_in_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 	// 1: check ACK
 	if(tcp_segment->ack) {
 		if (tcp_segment->ack_seq <= socket->iss || tcp_segment->ack_seq > socket->snd_nxt) {
@@ -106,10 +112,10 @@ void tcp_process_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_seg
 	}
 }
 
-void tcp_process_listen(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+void tcp_in_listen(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 }
 
-void tcp_process_closed(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts, uint16_t tcp_segment_size) {
+void tcp_in_closed(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts, uint16_t tcp_segment_size) {
 	if(tcp_segment->rst)
 		return;
 
@@ -143,17 +149,7 @@ int tcp_accept_test(struct tcp_socket *socket, struct tcp_segment *tcp_segment, 
 	return 0;
 }
 
-uint8_t tcp_process_options(struct tcp_segment *tcp_segment, struct tcp_options *opts) {
-	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 4);
-	if (options_size > 0)
-		tcp_parse_options(opts, tcp_segment->data, options_size);
-	else
-		opts->mss = TCP_DEFAULT_MSS;
-
-	return options_size;
-}
-
-void tcp_process_segment(struct net_dev *dev, struct eth_frame *frame) {
+void tcp_in(struct eth_frame *frame) {
 	struct ipv4_packet *ip_packet = (struct ipv4_packet *) frame->payload;
 	struct tcp_segment *tcp_segment = (struct tcp_segment *) (ip_packet->data +
 														((ip_packet->header_len * 4) - sizeof(struct ipv4_packet)));
@@ -187,20 +183,20 @@ void tcp_process_segment(struct net_dev *dev, struct eth_frame *frame) {
 
 	// Get options
 	struct tcp_options opts = {0};
-	uint8_t options_size = tcp_process_options(tcp_segment, &opts);
+	uint8_t options_size = tcp_in_options(tcp_segment, &opts);
 
 
 	// First check if we are in one of these 3 states
 	if(socket->state == TCPS_SYN_SENT) {
-		tcp_process_syn_sent(socket, tcp_segment, &opts);
+		tcp_in_syn_sent(socket, tcp_segment, &opts);
 		return;
 	}
 	else if(socket->state == TCPS_LISTEN) {
-		tcp_process_listen(socket, tcp_segment, &opts);
+		tcp_in_listen(socket, tcp_segment, &opts);
 		return;
 	}
 	else if(socket->state == TCPS_CLOSED) {
-		tcp_process_closed(socket, tcp_segment, &opts, tcp_segment_size);
+		tcp_in_closed(socket, tcp_segment, &opts, tcp_segment_size);
 		return;
 	}
 
