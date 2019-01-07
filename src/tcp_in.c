@@ -23,16 +23,14 @@ void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
 				break;
 
 			case TCP_OPTIONS_MSS: {
-				struct tcp_options_mss *mss = (struct tcp_options_mss *) ptr;
-				opts->mss = ntohs(mss->value);
-				ptr += sizeof(struct tcp_options_mss);
+				opts->mss = ptr[2] << 8 | ptr[3];
+				ptr += 4;
 				break;
 			}
 
 			case TCP_OPTIONS_WSCALE: {
-				struct tcp_options_wscale *wscale = (struct tcp_options_wscale *) ptr;
-				opts->window_scale = wscale->value;
-				ptr += sizeof(struct tcp_options_wscale);
+				opts->window_scale = ptr[2];
+				ptr += 3;
 				break;
 			}
 
@@ -43,10 +41,9 @@ void tcp_parse_options(struct tcp_options *opts, uint8_t *data, uint8_t size) {
 			}
 
 			case TCP_OPTIONS_TIMESTAMP: {
-				struct tcp_options_timestamp *ts = (struct tcp_options_timestamp *) ptr;
-				opts->timestamp = ntohl(ts->timestamp);
-				opts->echo = ntohl(ts->echo);
-				ptr += sizeof(struct tcp_options_timestamp);
+				opts->timestamp = ntohl(ptr[2] << 24 | ptr[3] << 16 | ptr[4] << 8 | ptr[5]);
+				opts->echo = ntohl(ptr[6] << 24 | ptr[7] << 16 | ptr[8] << 8 | ptr[9]);
+				ptr += 10;
 				break;
 			}
 

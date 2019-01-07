@@ -71,22 +71,6 @@ struct tcp_options {
 	uint32_t echo;
 } __attribute__((packed)) tcp_options;
 
-struct tcp_options_mss {
-	uint8_t kind;
-	uint8_t len;
-	uint16_t value;
-}  __attribute__((packed));
-
-struct tcp_options_wscale {
-	uint16_t _placeholder;
-	uint8_t value;
-}  __attribute__((packed));
-
-struct tcp_options_timestamp {
-	uint32_t timestamp;
-	uint32_t echo;
-}  __attribute__((packed));
-
 struct tcp_segment {
 	uint16_t source_port;
 	uint16_t dest_port;
@@ -103,7 +87,6 @@ struct tcp_segment {
 struct tcp_socket {
 	struct tcp_socket *next, *prev;
 	struct sock sock;
-
 
 	// TCP Control Block
 	enum tcp_state state;
