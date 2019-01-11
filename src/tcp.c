@@ -21,10 +21,11 @@ void *tcp_timer_slow(void *args) {
 		pthread_mutex_lock(threads_mutex);
 
 		struct tcp_socket *tcp_socket = tcp_sockets_head;
-		if(tcp_socket == NULL)
-			continue;
-
 		do {
+			if(tcp_socket == NULL)
+				break;
+
+			tcp_socket = tcp_socket->next;
 
 		} while(tcp_socket != tcp_sockets_head);
 
@@ -42,14 +43,18 @@ void *tcp_timer_fast(void *args) {
 		pthread_mutex_lock(threads_mutex);
 
 		struct tcp_socket *tcp_socket = tcp_sockets_head;
-		if(tcp_socket == NULL)
-			continue;
 
 		do {
+			if(tcp_socket == NULL)
+				break;
+
 			if(tcp_socket->delayed_ack) {
 				tcp_socket->delayed_ack = 0;
 				tcp_out_ack(tcp_socket);
 			}
+
+			tcp_socket = tcp_socket->next;
+
 		} while(tcp_socket != tcp_sockets_head);
 
 		pthread_mutex_unlock(threads_mutex);

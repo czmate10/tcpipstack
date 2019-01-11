@@ -332,7 +332,7 @@ void tcp_in(struct eth_frame *frame) {
 				uint8_t *payload = tcp_segment->data + options_size;
 
 				// Set rcv_next
-				socket->rcv_nxt += payload_size + tcp_segment->fin;  // add 1 to ack if the segment is also FIN
+				socket->rcv_nxt = tcp_segment->seq + payload_size + tcp_segment->fin;  // add 1 to ack if the segment is also FIN
 
 				// Debug print
 				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",

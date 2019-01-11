@@ -127,7 +127,7 @@ void finish() {
 #define TEST_SOCKET_POLL_INTERVAL 20  // check if we are connected every 20 ms
 #define TEST_SOCKET_TIMEOUT 5000  // timeout in 5 seconds if we are still not connected
 
-struct tcp_socket * test_connect() {
+struct tcp_socket *test_connect() {
 	uint32_t dest_ip;
 	inet_pton(AF_INET, "10.0.0.5", &dest_ip);
 
@@ -183,7 +183,6 @@ int main() {
 		}
 
 		finish();
-//		tcp_socket_free(tcp_socket);
 	}
 	else {
 		printf("Could not connect!\n");
