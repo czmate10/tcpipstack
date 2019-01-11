@@ -33,6 +33,23 @@ void tcp_out_send(struct tcp_socket *tcp_sock, struct sk_buff *buffer, uint8_t o
 }
 
 
+void tcp_out_data(struct tcp_socket *tcp_sock, uint8_t *data, uint16_t data_len) {
+	struct sk_buff *buffer = tcp_create_buffer((uint16_t)data_len);
+	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
+
+	tcp_segment->psh = 1;
+	tcp_segment->ack = 1;
+	tcp_segment->seq = htonl(tcp_sock->snd_nxt);
+	tcp_segment->ack_seq = htonl(tcp_sock->rcv_nxt);
+
+	memcpy(tcp_segment->data, data, (size_t)data_len);
+
+	tcp_out_send(tcp_sock, buffer, 0);
+
+	tcp_sock->snd_nxt += data_len;
+}
+
+
 void tcp_out_ack(struct tcp_socket *tcp_sock) {
 	struct sk_buff *buffer = tcp_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
@@ -67,6 +84,18 @@ void tcp_out_syn(struct tcp_socket *tcp_sock) {
 
 	// Increase SND.NXT
 	tcp_sock->snd_nxt++;
+}
+
+void tcp_out_fin(struct tcp_socket *tcp_sock) {
+	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
+
+	tcp_segment->fin = 1;
+	tcp_segment->ack = 1;
+	tcp_segment->seq = htonl(tcp_sock->snd_nxt);
+	tcp_segment->ack_seq = htonl(tcp_sock->rcv_nxt);
+
+	tcp_out_send(tcp_sock, buffer, 0);
 }
 
 void tcp_out_synack(struct tcp_socket *tcp_sock) {

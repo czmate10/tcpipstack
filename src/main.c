@@ -117,34 +117,62 @@ void finish() {
 	}
 }
 
-struct tcp_socket * setup_test_socket() {
+
+#define TEST_SOCKET_POLL_INTERVAL 20  // check if we are connected every 20 ms
+#define TEST_SOCKET_TIMEOUT 5000  // timeout in 5 seconds if we are still not connected
+
+struct tcp_socket * test_connect() {
 	uint32_t dest_ip;
 	inet_pton(AF_INET, "10.0.0.5", &dest_ip);
 
 	srand48(time(NULL));
 	uint16_t port = (uint16_t)lrand48();
-	printf("Using port %u\n\n", port);
 
-	struct tcp_socket *socket = tcp_socket_new(device->ipv4, dest_ip, port, 86);
+	struct tcp_socket *socket = tcp_socket_new(device->ipv4, dest_ip, port, 80);
 	socket->sock.dev = device;
 	socket->mss = 1460;
 	tcp_out_syn(socket);
 
-	return socket;
+	uint32_t ticks = 0;
+	while(1) {
+		if(socket->state == TCPS_ESTABLISHED)
+			return socket;
+
+		if(ticks > TEST_SOCKET_TIMEOUT / TEST_SOCKET_POLL_INTERVAL)
+			break;
+
+		ticks++;
+		usleep(TEST_SOCKET_POLL_INTERVAL * 1000);
+	}
+
+	tcp_socket_free(socket);
+	return NULL;
+}
+
+int test_send(struct tcp_socket *tcp_socket, uint8_t *data, size_t data_len) {
+	tcp_out_data(tcp_socket, data, (uint16_t)data_len);
+	return 0;
 }
 
 int main() {
 	setup();
 
-	// test socket
-	struct tcp_socket * socket = setup_test_socket();
+	// test tcp_socket
+	struct tcp_socket * tcp_socket = test_connect();
 
-	getchar();  // shut down on input
-	printf("Shutting down...\n");
+	if(tcp_socket) {
+		printf("Connected!\n");
+		char *test_data = "GET / HTTP/1.1\r\n\r\n";
+		test_send(tcp_socket, (uint8_t *) test_data, strlen(test_data));
 
-	getchar();
-	getchar();
+		getchar();  // shut down on input
 
-	finish();
-	tcp_socket_free(socket);
+		finish();
+		tcp_socket_free(tcp_socket);
+	}
+	else {
+		printf("Could not connect!\n");
+		finish();
+	}
+
 }

@@ -43,6 +43,9 @@ void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_socket_free(struct tcp_socket *tcp_socket) {
+	if(tcp_socket == NULL)
+		return;
+
 	if(tcp_socket == tcp_sockets_head) {
 		if(tcp_socket->next == tcp_socket) {  // This is the only socket
 			free(tcp_socket);

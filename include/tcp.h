@@ -132,8 +132,10 @@ struct sk_buff *tcp_create_buffer(uint16_t payload_size);
 
 
 void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
+void tcp_out_data(struct tcp_socket *tcp_sock, uint8_t *data, uint16_t data_len);
 void tcp_out_ack(struct tcp_socket *tcp_sock);
 void tcp_out_syn(struct tcp_socket *tcp_sock);
+void tcp_out_fin(struct tcp_socket *tcp_sock);
 void tcp_out_synack(struct tcp_socket *tcp_sock);
 void tcp_out_rst(struct tcp_socket *tcp_sock);
 void tcp_out_rstack(struct tcp_socket *tcp_sock);

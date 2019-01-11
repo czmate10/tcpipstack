@@ -100,7 +100,6 @@ void tcp_in_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment,
 
 		if(socket->snd_una > socket->iss) {
 			// Our SYN has been ACKed
-			printf("TCP IN :: established connection\n");
 			socket->state = TCPS_ESTABLISHED;
 			tcp_out_ack(socket);
 		}
@@ -279,6 +278,7 @@ void tcp_in(struct eth_frame *frame) {
 
 		case TCPS_LAST_ACK:
 			// FIN acknowledged
+			printf("TCP :: closed connection\n");
 			tcp_socket_free(socket);
 			return;
 
@@ -331,7 +331,7 @@ void tcp_in(struct eth_frame *frame) {
 				uint8_t *payload = tcp_segment->data + options_size;
 
 				// Set rcv_next
-				socket->rcv_nxt += payload_size;
+				socket->rcv_nxt += payload_size + tcp_segment->fin;  // add 1 to ack if the segment is also FIN
 
 				// Debug print
 				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",
@@ -366,12 +366,19 @@ void tcp_in(struct eth_frame *frame) {
 
 			case TCPS_SYN_RCVD:
 			case TCPS_ESTABLISHED:
-				printf("TCP :: closing connection\n");
+				printf("TCP :: closing connection...\n");
 
-				socket->rcv_nxt = tcp_segment->seq+1;
-				tcp_out_ack(socket);
+				if(!tcp_segment->psh) {
+					// We already sent ACK for PSH
+					socket->rcv_nxt = tcp_segment->seq + 1;
+					tcp_out_ack(socket);
+				}
 
 				socket->state = TCPS_CLOSE_WAIT;
+
+				// TODO: send close to application
+				tcp_out_fin(socket);
+				socket->state = TCPS_LAST_ACK;
 				break;
 
 			case TCPS_FIN_WAIT1:
