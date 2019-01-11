@@ -92,6 +92,7 @@ struct tcp_socket {
 	enum tcp_state state;
 	uint16_t mss;
 	uint32_t srtt;  // smoothed RTT
+	uint8_t delayed_ack;  // piggyback ACKs
 
 	uint16_t timers[TCP_T_COUNT];
 
@@ -139,8 +140,9 @@ void tcp_out_fin(struct tcp_socket *tcp_sock);
 void tcp_out_synack(struct tcp_socket *tcp_sock);
 void tcp_out_rst(struct tcp_socket *tcp_sock);
 void tcp_out_rstack(struct tcp_socket *tcp_sock);
-void *tcp_timer_slow();
-void *tcp_timer_fast();
+
+void *tcp_timer_fast(void *args);
+void *tcp_timer_slow(void *args);
 
 
 void tcp_socket_free(struct tcp_socket *tcp_socket);

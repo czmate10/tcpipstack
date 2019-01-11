@@ -279,6 +279,7 @@ void tcp_in(struct eth_frame *frame) {
 		case TCPS_LAST_ACK:
 			// FIN acknowledged
 			printf("TCP :: closed connection\n");
+			socket->state = TCPS_CLOSED;
 			tcp_socket_free(socket);
 			return;
 
@@ -337,7 +338,7 @@ void tcp_in(struct eth_frame *frame) {
 				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",
 					   payload_size, payload_size, payload);
 
-				tcp_out_ack(socket);  // TODO: should be piggybacked
+				socket->delayed_ack = 1;
 			}
 			break;
 		}

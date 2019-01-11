@@ -6,7 +6,7 @@
 
 
 uint16_t eth_read(struct net_dev *dev, struct eth_frame *frame) {
-	ssize_t bytes = read((int)dev->sock_fd, frame, ETHERNET_MAX_SIZE);
+	ssize_t bytes = read(dev->sock_fd, frame, ETHERNET_MAX_SIZE);
 	if (bytes == -1) {
 		perror("failed to read data");
 		return 0;

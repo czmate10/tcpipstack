@@ -30,6 +30,7 @@
 int RUNNING = 1;
 struct net_dev* device = NULL;
 pthread_t threads[THREAD_COUNT];
+pthread_mutex_t threads_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 int handle_eth_frame(struct net_dev *dev, struct eth_frame *eth_frame) {
@@ -50,7 +51,9 @@ int handle_eth_frame(struct net_dev *dev, struct eth_frame *eth_frame) {
 	}
 }
 
-void *main_loop() {
+void *main_loop(void *args) {
+	pthread_mutex_t *threads_mutex = (pthread_mutex_t *)args;
+
 	struct pollfd poll_fd = { .fd = device->sock_fd, .events = POLLIN | POLLNVAL | POLLERR | POLLHUP };
 	struct timespec poll_interval = { .tv_sec = 0, .tv_nsec = POLL_RATE_NS };
 
@@ -67,9 +70,12 @@ void *main_loop() {
 				perror("could not allocate memory for ethernet frame");
 				exit(1);
 			}
+			memset(eth_frame, 0, ETHERNET_MAX_SIZE);
 
 			uint16_t num_bytes = eth_read(device, eth_frame);
+			pthread_mutex_lock(threads_mutex);
 			handle_eth_frame(device, eth_frame);
+			pthread_mutex_unlock(threads_mutex);
 
 			free(eth_frame);
 		}
@@ -81,7 +87,7 @@ void *main_loop() {
 }
 
 void create_thread(int id, void *(*func) (void *) ) {
-	int res = pthread_create(&threads[id], NULL, func, NULL);
+	int res = pthread_create(&threads[id], NULL, (void*)func, (void*)&threads_mutex);
 	if(res != 0) {
 		fprintf(stderr, "failed to create thread #%d: %s", id, strerror(errno));
 		perror("Failed to create thread");
@@ -128,15 +134,17 @@ struct tcp_socket * test_connect() {
 	srand48(time(NULL));
 	uint16_t port = (uint16_t)lrand48();
 
-	struct tcp_socket *socket = tcp_socket_new(device->ipv4, dest_ip, port, 80);
-	socket->sock.dev = device;
-	socket->mss = 1460;
-	tcp_out_syn(socket);
+	pthread_mutex_lock(&threads_mutex);
+	struct tcp_socket *tcp_socket = tcp_socket_new(device->ipv4, dest_ip, port, 80);
+	tcp_socket->sock.dev = device;
+	tcp_socket->mss = 1460;
+	tcp_out_syn(tcp_socket);
+	pthread_mutex_unlock(&threads_mutex);
 
 	uint32_t ticks = 0;
 	while(1) {
-		if(socket->state == TCPS_ESTABLISHED)
-			return socket;
+		if(tcp_socket->state == TCPS_ESTABLISHED)
+			return tcp_socket;
 
 		if(ticks > TEST_SOCKET_TIMEOUT / TEST_SOCKET_POLL_INTERVAL)
 			break;
@@ -145,7 +153,9 @@ struct tcp_socket * test_connect() {
 		usleep(TEST_SOCKET_POLL_INTERVAL * 1000);
 	}
 
-	tcp_socket_free(socket);
+	pthread_mutex_lock(&threads_mutex);
+	tcp_socket_free(tcp_socket);
+	pthread_mutex_unlock(&threads_mutex);
 	return NULL;
 }
 
@@ -165,10 +175,15 @@ int main() {
 		char *test_data = "GET / HTTP/1.1\r\n\r\n";
 		test_send(tcp_socket, (uint8_t *) test_data, strlen(test_data));
 
-		getchar();  // shut down on input
+		while(1) {
+			if(tcp_socket->state == TCPS_CLOSED)  // TODO: Socket is more than likely already free'd here
+				break;
+
+			usleep(TEST_SOCKET_POLL_INTERVAL * 1000);
+		}
 
 		finish();
-		tcp_socket_free(tcp_socket);
+//		tcp_socket_free(tcp_socket);
 	}
 	else {
 		printf("Could not connect!\n");

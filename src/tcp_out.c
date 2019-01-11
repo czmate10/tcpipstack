@@ -47,6 +47,7 @@ void tcp_out_data(struct tcp_socket *tcp_sock, uint8_t *data, uint16_t data_len)
 	tcp_out_send(tcp_sock, buffer, 0);
 
 	tcp_sock->snd_nxt += data_len;
+	tcp_sock->delayed_ack = 0;  // piggyback off
 }
 
 

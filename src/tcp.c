@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include "tcp.h"
 
 extern int RUNNING;
@@ -13,24 +14,45 @@ uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len,
 	return checksum((uint16_t *)tcp_segment, (uint32_t) (tcp_segment_len), sum);
 }
 
-void *tcp_timer_slow() {
+void *tcp_timer_slow(void *args) {
+	pthread_mutex_t *threads_mutex = (pthread_mutex_t *)args;
+
 	while(RUNNING) {
+		pthread_mutex_lock(threads_mutex);
+
 		struct tcp_socket *tcp_socket = tcp_sockets_head;
+		if(tcp_socket == NULL)
+			continue;
+
 		do {
 
 		} while(tcp_socket != tcp_sockets_head);
+
+		pthread_mutex_unlock(threads_mutex);
 
 		usleep(TCP_T_SLOW_INTERVAL);
 	}
 	return NULL;
 }
 
-void *tcp_timer_fast() {
-	while(RUNNING) {
-		struct tcp_socket *tcp_socket = tcp_sockets_head;
-		do {
+void *tcp_timer_fast(void *args) {
+	pthread_mutex_t *threads_mutex = (pthread_mutex_t *)args;
 
+	while(RUNNING) {
+		pthread_mutex_lock(threads_mutex);
+
+		struct tcp_socket *tcp_socket = tcp_sockets_head;
+		if(tcp_socket == NULL)
+			continue;
+
+		do {
+			if(tcp_socket->delayed_ack) {
+				tcp_socket->delayed_ack = 0;
+				tcp_out_ack(tcp_socket);
+			}
 		} while(tcp_socket != tcp_sockets_head);
+
+		pthread_mutex_unlock(threads_mutex);
 
 		usleep(TCP_T_FAST_INTERVAL);
 	}
