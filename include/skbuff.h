@@ -1,15 +1,20 @@
 #pragma once
 
 #include <stdlib.h>
+
+#include "list.h"
 #include "tap.h"
 
 struct sk_buff {
-	struct sk_buff *next;
-	struct sk_buff *prev;
+	struct list_head list;
 
 	struct net_dev* dev;
-
 	uint32_t size;
+
+	uint32_t payload_size;
+	uint32_t seq;
+	uint32_t seq_end;
+
 	uint8_t *data;
 };
 

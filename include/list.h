@@ -9,10 +9,12 @@ struct list_head {
 	struct list_head *prev;
 };
 
+
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
+
 
 static inline void INIT_LIST_HEAD(struct list_head *list)
 {
@@ -30,6 +32,7 @@ static inline void __list_add(struct list_head *new,
 	new->prev = prev;
 	prev->next = new;
 }
+
 
 /**
  * list_add - add a new entry
@@ -80,6 +83,7 @@ static inline void list_del(struct list_head *entry)
 	entry->prev = NULL;
 }
 
+
 /**
  * list_replace - replace old entry by new one
  * @old : the element to be replaced
@@ -96,12 +100,14 @@ static inline void list_replace(struct list_head *old,
 	new->prev->next = new;
 }
 
+
 static inline void list_replace_init(struct list_head *old,
 									 struct list_head *new)
 {
 	list_replace(old, new);
 	INIT_LIST_HEAD(old);
 }
+
 
 /**
  * list_empty - tests whether a list is empty
@@ -145,4 +151,16 @@ pos = n, n = pos->next)
 * @member:	the name of the list_struct within the struct.
 */
 #define list_entry(ptr, type, member) \
-		((type *) ((char *) (ptr) - offsetof(type, member)))
+	((type *) ((char *) (ptr) - offsetof(type, member)))
+
+
+/**
+* list_first_entry - get the first element from a list
+* @ptr:	the list head to take the element from.
+* @type:	the type of the struct this is embedded in.
+* @member:	the name of the list_struct within the struct.
+*
+* Note, that list is expected to be not empty.
+*/
+#define list_first_entry(ptr, type, member) \
+	list_entry((ptr)->next, type, member)
