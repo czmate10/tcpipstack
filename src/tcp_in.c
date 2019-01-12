@@ -67,14 +67,14 @@ uint8_t tcp_in_options(struct tcp_segment *tcp_segment, struct tcp_options *opts
 	return options_size;
 }
 
-void tcp_in_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 	// 1: check ACK
 	if(tcp_segment->ack) {
-		if (tcp_segment->ack_seq <= socket->iss || tcp_segment->ack_seq > socket->snd_nxt) {
+		if (tcp_segment->ack_seq <= tcp_socket->iss || tcp_segment->ack_seq > tcp_socket->snd_nxt) {
 			return; // TODO: check RST flag
 		}
 
-		if (tcp_segment->ack_seq < socket->snd_una || tcp_segment->ack_seq > socket->snd_nxt) {
+		if (tcp_segment->ack_seq < tcp_socket->snd_una || tcp_segment->ack_seq > tcp_socket->snd_nxt) {
 			return;
 		}
 	}
@@ -82,7 +82,7 @@ void tcp_in_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment,
 	// 2: check RST bit
 	if (tcp_segment->rst) {
 		fprintf(stderr, "error: connection reset");
-		tcp_socket_free(socket);
+		tcp_socket_free(tcp_socket);
 		return;
 	}
 
@@ -90,60 +90,60 @@ void tcp_in_syn_sent(struct tcp_socket *socket, struct tcp_segment *tcp_segment,
 
 	// 4: check the SYN bit
 	if(tcp_segment->syn) {
-		socket->rcv_nxt = tcp_segment->seq + 1;
-		socket->irs = tcp_segment->seq;
+		tcp_socket->rcv_nxt = tcp_segment->seq + 1;
+		tcp_socket->irs = tcp_segment->seq;
 		if(tcp_segment->ack) {
-			socket->snd_una = tcp_segment->ack_seq;
+			tcp_socket->snd_una = tcp_segment->ack_seq;
 			// TODO:  any segments on the retransmission queue which
 			//        are thereby acknowledged should be removed.
 		}
 
-		if(socket->snd_una > socket->iss) {
+		if(tcp_socket->snd_una > tcp_socket->iss) {
 			// Our SYN has been ACKed
-			socket->state = TCPS_ESTABLISHED;
-			tcp_out_ack(socket);
+			tcp_socket->state = TCPS_ESTABLISHED;
+			tcp_out_ack(tcp_socket);
 		}
 		else {
-			socket->state = TCPS_SYN_RCVD;
-			socket->snd_una = socket->iss;
-			tcp_out_synack(socket);
+			tcp_socket->state = TCPS_SYN_RCVD;
+			tcp_socket->snd_una = tcp_socket->iss;
+			tcp_out_synack(tcp_socket);
 		}
 	}
 }
 
-void tcp_in_listen(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
+void tcp_in_listen(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 }
 
-void tcp_in_closed(struct tcp_socket *socket, struct tcp_segment *tcp_segment, struct tcp_options *opts, uint16_t tcp_segment_size) {
+void tcp_in_closed(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segment, struct tcp_options *opts, uint16_t tcp_segment_size) {
 	if(tcp_segment->rst)
 		return;
 
 	// Send RST
 	if(tcp_segment->ack) {
-		socket->snd_nxt = tcp_segment->ack_seq;
-		tcp_out_rst(socket);
+		tcp_socket->snd_nxt = tcp_segment->ack_seq;
+		tcp_out_rst(tcp_socket);
 	}
 	else {
-		socket->rcv_nxt = tcp_segment->seq + tcp_segment_size;
-		socket->snd_nxt = 0;
-		tcp_out_rstack(socket);
+		tcp_socket->rcv_nxt = tcp_segment->seq + tcp_segment_size;
+		tcp_socket->snd_nxt = 0;
+		tcp_out_rstack(tcp_socket);
 	}
 }
 
-int tcp_accept_test(struct tcp_socket *socket, struct tcp_segment *tcp_segment, uint16_t tcp_segment_size) {
-	if(tcp_segment_size == 0 && socket->rcv_wnd == 0) {
-		return tcp_segment->seq == socket->rcv_nxt;
+int tcp_accept_test(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segment, uint16_t tcp_segment_size) {
+	if(tcp_segment_size == 0 && tcp_socket->rcv_wnd == 0) {
+		return tcp_segment->seq == tcp_socket->rcv_nxt;
 	}
 
-	else if(tcp_segment_size == 0 && socket->rcv_wnd > 0)
-		return socket->rcv_nxt <= tcp_segment->seq < (socket->rcv_nxt + socket->rcv_wnd);
+	else if(tcp_segment_size == 0 && tcp_socket->rcv_wnd > 0)
+		return tcp_socket->rcv_nxt <= tcp_segment->seq < (tcp_socket->rcv_nxt + tcp_socket->rcv_wnd);
 
-	else if(tcp_segment_size > 0 && socket->rcv_wnd == 0)
+	else if(tcp_segment_size > 0 && tcp_socket->rcv_wnd == 0)
 		return 0;
 
-	else if(tcp_segment_size > 0 && socket->rcv_wnd > 0)
-		return ((socket->rcv_nxt <= tcp_segment->seq < socket->rcv_nxt+socket->rcv_wnd) ||
-				(socket->rcv_nxt <= tcp_segment->seq + tcp_segment_size - 1 < socket->rcv_nxt+socket->rcv_wnd));
+	else if(tcp_segment_size > 0 && tcp_socket->rcv_wnd > 0)
+		return ((tcp_socket->rcv_nxt <= tcp_segment->seq < tcp_socket->rcv_nxt+tcp_socket->rcv_wnd) ||
+				(tcp_socket->rcv_nxt <= tcp_segment->seq + tcp_segment_size - 1 < tcp_socket->rcv_nxt+tcp_socket->rcv_wnd));
 
 	return 0;
 }
@@ -166,10 +166,10 @@ void tcp_in(struct eth_frame *frame) {
 	// ntoh
 	tcp_segment_ntoh(tcp_segment);
 
-	// Get socket
-	struct tcp_socket *socket = tcp_socket_get(ip_packet->dest_ip, ip_packet->source_ip, tcp_segment->dest_port,
+	// Get tcp_socket
+	struct tcp_socket *tcp_socket = tcp_socket_get(ip_packet->dest_ip, ip_packet->source_ip, tcp_segment->dest_port,
 											   tcp_segment->source_port);
-	if (!socket || socket->state == TCPS_CLOSED) {
+	if (!tcp_socket || tcp_socket->state == TCPS_CLOSED) {
 		// TODO: If there is no RST flag present, send RST
 		printf("TCP segment dropped (no active connection): %d -> %d\n", tcp_segment->source_port, tcp_segment->dest_port);
 		return;
@@ -178,7 +178,7 @@ void tcp_in(struct eth_frame *frame) {
 	// Debug print
 	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | WS %d | MSS %d\n",
 		   tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
-		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, socket->mss);
+		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, tcp_socket->mss);
 
 	// Get options
 	struct tcp_options opts = {0};
@@ -186,38 +186,38 @@ void tcp_in(struct eth_frame *frame) {
 
 
 	// First check if we are in one of these 3 states
-	if(socket->state == TCPS_SYN_SENT) {
-		tcp_in_syn_sent(socket, tcp_segment, &opts);
+	if(tcp_socket->state == TCPS_SYN_SENT) {
+		tcp_in_syn_sent(tcp_socket, tcp_segment, &opts);
 		return;
 	}
-	else if(socket->state == TCPS_LISTEN) {
-		tcp_in_listen(socket, tcp_segment, &opts);
+	else if(tcp_socket->state == TCPS_LISTEN) {
+		tcp_in_listen(tcp_socket, tcp_segment, &opts);
 		return;
 	}
-	else if(socket->state == TCPS_CLOSED) {
-		tcp_in_closed(socket, tcp_segment, &opts, tcp_segment_size);
+	else if(tcp_socket->state == TCPS_CLOSED) {
+		tcp_in_closed(tcp_socket, tcp_segment, &opts, tcp_segment_size);
 		return;
 	}
 
 	// 1: check sequence number
-	if(!tcp_accept_test(socket, tcp_segment, tcp_data_size)) {
+	if(!tcp_accept_test(tcp_socket, tcp_segment, tcp_data_size)) {
 		fprintf(stderr, "Invalid TCP ack sequence num: %u - sending RST\n", tcp_segment->ack_seq);
 
 		if(!tcp_segment->rst)
-			tcp_out_ack(socket);
+			tcp_out_ack(tcp_socket);
 
 		return;
 	}
 
 	// 2: check the RST bit
 	if(tcp_segment->rst) {
-		switch(socket->state) {
+		switch(tcp_socket->state) {
 			case TCPS_SYN_RCVD:
 				// If passive open, set to LISTEN stage
 				// If active open, connection was refused
 				fprintf(stderr, "connection refused\n");
-				socket->state = TCPS_CLOSED;  // or LISTEN if passive open
-				tcp_socket_free(socket);
+				tcp_socket->state = TCPS_CLOSED;  // or LISTEN if passive open
+				tcp_socket_free(tcp_socket);
 				return;
 
 			case TCPS_ESTABLISHED:
@@ -226,19 +226,19 @@ void tcp_in(struct eth_frame *frame) {
 			case TCPS_CLOSE_WAIT:
 				// TODO: flush segment queues
 				fprintf(stderr, "connection reset\n");
-				socket->state = TCPS_CLOSED;
-				tcp_socket_free(socket);
+				tcp_socket->state = TCPS_CLOSED;
+				tcp_socket_free(tcp_socket);
 				return;
 
 			case TCPS_CLOSING:
 			case TCPS_LAST_ACK:
 			case TCPS_TIME_WAIT:
-				socket->state = TCPS_CLOSED;
-				tcp_socket_free(socket);
+				tcp_socket->state = TCPS_CLOSED;
+				tcp_socket_free(tcp_socket);
 				return;
 
 			default:
-				fprintf(stderr, "unknown state for socket: %d\n", socket->state);
+				fprintf(stderr, "unknown state for tcp_socket: %d\n", tcp_socket->state);
 				return;
 		}
 	}
@@ -248,7 +248,7 @@ void tcp_in(struct eth_frame *frame) {
 
 	// 4: check the SYN bit
 	if(tcp_segment->syn) {
-		switch(socket->state) {
+		switch(tcp_socket->state) {
 			case TCPS_SYN_RCVD:
 			case TCPS_ESTABLISHED:
 			case TCPS_FIN_WAIT1:
@@ -259,9 +259,9 @@ void tcp_in(struct eth_frame *frame) {
 			case TCPS_TIME_WAIT:
 				// TODO: flush segment queues
 				fprintf(stderr, "connection reset\n");
-				tcp_out_rst(socket);
-				socket->state = TCPS_CLOSED;
-				tcp_socket_free(socket);
+				tcp_out_rst(tcp_socket);
+				tcp_socket->state = TCPS_CLOSED;
+				tcp_socket_free(tcp_socket);
 				return;
 		}
 	}
@@ -270,50 +270,50 @@ void tcp_in(struct eth_frame *frame) {
 	if(!tcp_segment->ack)
 		return;
 
-	switch(socket->state) {
+	switch(tcp_socket->state) {
 		case TCPS_TIME_WAIT:
-			tcp_out_ack(socket);
+			tcp_out_ack(tcp_socket);
 			// TODO: restart 2MSL timer here
 			return;
 
 		case TCPS_LAST_ACK:
 			// FIN acknowledged
 			printf("TCP :: closed connection\n");
-			socket->state = TCPS_CLOSED;
-			tcp_socket_free(socket);
+			tcp_socket->state = TCPS_CLOSED;
+			tcp_socket_free(tcp_socket);
 			return;
 
 		case TCPS_SYN_RCVD:
-			if(socket->snd_una <= tcp_segment->ack_seq <= socket->snd_nxt) {
-				socket->state = TCPS_ESTABLISHED;
+			if(tcp_socket->snd_una <= tcp_segment->ack_seq <= tcp_socket->snd_nxt) {
+				tcp_socket->state = TCPS_ESTABLISHED;
 				// Continue processing
 			}
 			else {
-				tcp_out_rst(socket);
+				tcp_out_rst(tcp_socket);
 				return;
 			}
 		case TCPS_FIN_WAIT1:
-			socket->state = TCPS_FIN_WAIT2;
+			tcp_socket->state = TCPS_FIN_WAIT2;
 		case TCPS_FIN_WAIT2:
 			// close is acknowledged, but don't delete the TCB yet
 		case TCPS_CLOSING:
-			socket->state = TCPS_TIME_WAIT;
+			tcp_socket->state = TCPS_TIME_WAIT;
 		case TCPS_CLOSE_WAIT:
 		case TCPS_ESTABLISHED:
-			if(socket->snd_una < tcp_segment->ack_seq <= socket->snd_nxt) {
-				socket->snd_una = tcp_segment->ack_seq;
+			if(tcp_socket->snd_una < tcp_segment->ack_seq <= tcp_socket->snd_nxt) {
+				tcp_socket->snd_una = tcp_segment->ack_seq;
 				// TODO: remove acknowledged segments in the buffer
 
 				// Set send window, but not if it's an old segment (snd_wl1, snd_wl2)
-				if(socket->snd_wl1 < tcp_segment->seq || (socket->snd_wl1 == tcp_segment->seq && socket->snd_wl2 <= tcp_segment->ack_seq)) {
-					socket->snd_wnd = tcp_segment->window_size;
-					socket->snd_wl1 = tcp_segment->seq;
-					socket->snd_wl2 = tcp_segment->ack_seq;
+				if(tcp_socket->snd_wl1 < tcp_segment->seq || (tcp_socket->snd_wl1 == tcp_segment->seq && tcp_socket->snd_wl2 <= tcp_segment->ack_seq)) {
+					tcp_socket->snd_wnd = tcp_segment->window_size;
+					tcp_socket->snd_wl1 = tcp_segment->seq;
+					tcp_socket->snd_wl2 = tcp_segment->ack_seq;
 				}
 			}
-			else if(tcp_segment->ack_seq > socket->snd_nxt) {
+			else if(tcp_segment->ack_seq > tcp_socket->snd_nxt) {
 				// Not yet sent
-				tcp_out_ack(socket);
+				tcp_out_ack(tcp_socket);
 				return;
 			}
 	}
@@ -321,24 +321,27 @@ void tcp_in(struct eth_frame *frame) {
 	// 6: check URG bit
 
 	// 7: process segment text
-	switch(socket->state) {
+	switch(tcp_socket->state) {
 		case TCPS_ESTABLISHED:
 		case TCPS_FIN_WAIT1:
 		case TCPS_FIN_WAIT2: {
 			uint16_t payload_size = ip_packet->len - sizeof(struct ipv4_packet) - sizeof(struct tcp_segment) - options_size;
 
-			if (tcp_segment->psh && payload_size > 0) {
+			if (payload_size > 0) {
 				// Get payload
 				uint8_t *payload = tcp_segment->data + options_size;
 
 				// Set rcv_next
-				socket->rcv_nxt = tcp_segment->seq + payload_size + tcp_segment->fin;  // add 1 to ack if the segment is also FIN
+				tcp_socket->rcv_nxt = tcp_segment->seq + payload_size + (tcp_segment->fin & 0x01);  // add 1 to ack if the segment is also FIN
 
 				// Debug print
 				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",
 					   payload_size, payload_size, payload);
 
-				socket->delayed_ack = 1;
+				if(tcp_socket->delayed_ack)  // RFC1122 states there should be ACK for at least every 2nd incoming segment
+					tcp_out_ack(tcp_socket);
+				else
+					tcp_socket->delayed_ack = 1;
 			}
 			break;
 		}
@@ -352,13 +355,13 @@ void tcp_in(struct eth_frame *frame) {
 			break;
 
 		default:
-			fprintf(stderr, "unknown state for socket: %d\n", socket->state);
+			fprintf(stderr, "unknown state for tcp_socket: %d\n", tcp_socket->state);
 			return;
 	}
 
 	// 8: check FIN bit
 	if(tcp_segment->fin) {
-		switch (socket->state) {
+		switch (tcp_socket->state) {
 			case TCPS_CLOSED:
 			case TCPS_LISTEN:
 			case TCPS_SYN_SENT:
@@ -371,15 +374,15 @@ void tcp_in(struct eth_frame *frame) {
 
 				if(!tcp_segment->psh) {
 					// We already sent ACK for PSH
-					socket->rcv_nxt = tcp_segment->seq + 1;
-					tcp_out_ack(socket);
+					tcp_socket->rcv_nxt = tcp_segment->seq + 1;
+					tcp_out_ack(tcp_socket);
 				}
 
-				socket->state = TCPS_CLOSE_WAIT;
+				tcp_socket->state = TCPS_CLOSE_WAIT;
 
 				// TODO: send close to application
-				tcp_out_fin(socket);
-				socket->state = TCPS_LAST_ACK;
+				tcp_out_fin(tcp_socket);
+				tcp_socket->state = TCPS_LAST_ACK;
 				break;
 
 			case TCPS_FIN_WAIT1:
@@ -387,12 +390,12 @@ void tcp_in(struct eth_frame *frame) {
 				// enter TIME-WAIT, start the time-wait timer, turn off the other
 				// timers; otherwise enter the CLOSING state.
 				// TODO: start time-wait timer if needed
-				socket->state = TCPS_CLOSING;
+				tcp_socket->state = TCPS_CLOSING;
 				break;
 
 
 			case TCPS_FIN_WAIT2:
-				socket->state = TCPS_TIME_WAIT;
+				tcp_socket->state = TCPS_TIME_WAIT;
 				// TODO: start time-wait timer
 				break;
 

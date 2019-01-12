@@ -143,8 +143,9 @@ struct tcp_socket *test_connect() {
 
 	uint32_t ticks = 0;
 	while(1) {
-		if(tcp_socket->state == TCPS_ESTABLISHED)
+		if(tcp_socket->state == TCPS_ESTABLISHED) {
 			return tcp_socket;
+		}
 
 		if(ticks > TEST_SOCKET_TIMEOUT / TEST_SOCKET_POLL_INTERVAL)
 			break;
@@ -182,6 +183,7 @@ int main() {
 			usleep(TEST_SOCKET_POLL_INTERVAL * 1000);
 		}
 
+		usleep(600 * 1000);  // Wait before closing
 		finish();
 	}
 	else {

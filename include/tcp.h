@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <string.h>
 
+#include "list.h"
 #include "skbuff.h"
 #include "sock.h"
 #include "eth.h"
@@ -85,8 +86,9 @@ struct tcp_segment {
 }  __attribute__((packed));
 
 struct tcp_socket {
-	struct tcp_socket *next, *prev;
+	struct list_head list;
 	struct sock sock;
+	struct sk_buff* write_queue;
 
 	// TCP Control Block
 	enum tcp_state state;
@@ -133,13 +135,13 @@ struct sk_buff *tcp_create_buffer(uint16_t payload_size);
 
 
 void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
-void tcp_out_data(struct tcp_socket *tcp_sock, uint8_t *data, uint16_t data_len);
-void tcp_out_ack(struct tcp_socket *tcp_sock);
-void tcp_out_syn(struct tcp_socket *tcp_sock);
-void tcp_out_fin(struct tcp_socket *tcp_sock);
-void tcp_out_synack(struct tcp_socket *tcp_sock);
-void tcp_out_rst(struct tcp_socket *tcp_sock);
-void tcp_out_rstack(struct tcp_socket *tcp_sock);
+void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);
+void tcp_out_ack(struct tcp_socket *tcp_socket);
+void tcp_out_syn(struct tcp_socket *tcp_socket);
+void tcp_out_fin(struct tcp_socket *tcp_socket);
+void tcp_out_synack(struct tcp_socket *tcp_socket);
+void tcp_out_rst(struct tcp_socket *tcp_socket);
+void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
 void *tcp_timer_fast(void *args);
 void *tcp_timer_slow(void *args);

@@ -1,7 +1,10 @@
 #include <pthread.h>
 #include "tcp.h"
 
+
 extern int RUNNING;
+static LIST_HEAD(tcp_socket_list);
+
 
 uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip) {
 	// We need to include the pseudo-header in the checksum.
@@ -20,14 +23,16 @@ void *tcp_timer_slow(void *args) {
 	while(RUNNING) {
 		pthread_mutex_lock(threads_mutex);
 
-		struct tcp_socket *tcp_socket = tcp_sockets_head;
-		do {
+		struct list_head *list_item;
+		struct tcp_socket *tcp_socket;
+
+		list_for_each(list_item, &tcp_socket_list) {
+			tcp_socket = list_entry(list_item, struct tcp_socket, list);
+
 			if(tcp_socket == NULL)
 				break;
 
-			tcp_socket = tcp_socket->next;
-
-		} while(tcp_socket != tcp_sockets_head);
+		}
 
 		pthread_mutex_unlock(threads_mutex);
 
@@ -42,20 +47,18 @@ void *tcp_timer_fast(void *args) {
 	while(RUNNING) {
 		pthread_mutex_lock(threads_mutex);
 
-		struct tcp_socket *tcp_socket = tcp_sockets_head;
+		struct list_head *list_item;
+		struct tcp_socket *tcp_socket;
 
-		do {
+		list_for_each(list_item, &tcp_socket_list) {
+			tcp_socket = list_entry(list_item, struct tcp_socket, list);
+
 			if(tcp_socket == NULL)
 				break;
 
-			if(tcp_socket->delayed_ack) {
-				tcp_socket->delayed_ack = 0;
+			if(tcp_socket->delayed_ack)
 				tcp_out_ack(tcp_socket);
-			}
-
-			tcp_socket = tcp_socket->next;
-
-		} while(tcp_socket != tcp_sockets_head);
+		}
 
 		pthread_mutex_unlock(threads_mutex);
 
@@ -73,21 +76,7 @@ void tcp_socket_free(struct tcp_socket *tcp_socket) {
 	if(tcp_socket == NULL)
 		return;
 
-	if(tcp_socket == tcp_sockets_head) {
-		if(tcp_socket->next == tcp_socket) {  // This is the only socket
-			free(tcp_socket);
-			tcp_sockets_head = NULL;
-			return;
-		}
-		else
-			tcp_sockets_head = tcp_socket->next;
-	}
-
-	struct tcp_socket *prev = tcp_socket->prev;
-	struct tcp_socket *next = tcp_socket->next;
-	prev->next = next;
-	next->prev = prev;
-
+	list_del(&tcp_socket->list);
 	free(tcp_socket);
 }
 
@@ -111,34 +100,26 @@ struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t
 	tcp_socket->sock.source_port = source_port;
 	tcp_socket->sock.dest_port = dest_port;
 
-	if(tcp_sockets_head == NULL) {
-		tcp_sockets_head = tcp_socket;
-		tcp_socket->prev = tcp_socket;
-		tcp_socket->next = tcp_socket;
-		return tcp_socket;
-	}
-
-	// Add to tail
-	tcp_sockets_head->prev->next = tcp_socket;
-	tcp_socket->prev = tcp_sockets_head->prev;
-	tcp_socket->next = tcp_sockets_head;
-	tcp_sockets_head->prev = tcp_socket;
+	list_add(&tcp_socket->list, &tcp_socket_list);
 
 	return tcp_socket;
 }
 
 struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port) {
-	if(tcp_sockets_head == NULL)
-		return NULL;
+	struct list_head *list_item;
+	struct tcp_socket *tcp_socket_item;
 
-	struct tcp_socket *temp = tcp_sockets_head;
-	do {
-		if (temp->sock.source_ip == source_ip && temp->sock.dest_ip == dest_ip &&
-			temp->sock.source_port == source_port && temp->sock.dest_port == dest_port)
-			return temp;
-		else
-			temp = temp->next;
-	} while(temp != tcp_sockets_head);
+	list_for_each(list_item, &tcp_socket_list) {
+		tcp_socket_item = list_entry(list_item, struct tcp_socket, list);
+
+		if(tcp_socket_item == NULL)
+			return NULL;
+
+		if(tcp_socket_item->sock.source_ip == source_ip && tcp_socket_item->sock.dest_ip == dest_ip &&
+				tcp_socket_item->sock.source_port == source_port && tcp_socket_item->sock.dest_port == dest_port) {
+			return tcp_socket_item;
+		}
+	}
 
 	return NULL;
 }
