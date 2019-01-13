@@ -11,7 +11,8 @@ struct sk_buff *tcp_alloc(uint32_t payload_size) {
 }
 
 
-static void inline tcp_out_set_seqnums(struct tcp_socket *tcp_socket, struct sk_buff *buffer, uint16_t payload_size) {
+// Calculates seq and ack_seq
+static void tcp_out_set_seqnums(struct tcp_socket *tcp_socket, struct sk_buff *buffer, uint16_t payload_size) {
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->seq = tcp_socket->snd_nxt;
@@ -23,50 +24,33 @@ static void inline tcp_out_set_seqnums(struct tcp_socket *tcp_socket, struct sk_
 }
 
 
-void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
+// Converts header variables to network endianness and fills checksum
+void tcp_out_header(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 	struct ipv4_packet *ip_packet = ipv4_packet_from_skb(buffer);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	ip_packet->protocol = IPPROTO_TCP;
 
-	// TCP fields
 	tcp_segment->seq = htonl(tcp_segment->seq);
 	tcp_segment->ack_seq = htonl(tcp_segment->ack_seq);
 	tcp_segment->source_port = htons(tcp_socket->sock.source_port);
 	tcp_segment->dest_port = htons(tcp_socket->sock.dest_port);
 	tcp_segment->window_size = htons(tcp_socket->rcv_wnd);
 
-	// Checksum
 	tcp_segment->checksum = 0;
 	tcp_segment->checksum = tcp_checksum(tcp_segment, (uint16_t)(buffer->size - ETHERNET_HEADER_SIZE - IP_HEADER_SIZE),
-									 tcp_socket->sock.source_ip, tcp_socket->sock.dest_ip);
+										 tcp_socket->sock.source_ip, tcp_socket->sock.dest_ip);
+}
 
-	// RTO
+// Sends TCP segment
+void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
+	// Set RTO
 	tcp_socket->rto_expires = tcp_timer_get_ticks() + tcp_socket->rto;
 
+	//if(!tcp_segment->psh || tcp_socket->rto > 1000) // for debugging
 	ipv4_send_packet(&tcp_socket->sock, buffer);
 }
 
-void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
-	tcp_socket->write_queue.len++;
-	list_add_tail(&buffer->list, &tcp_socket->write_queue.list);
-}
-
-void tcp_out_queue_send(struct tcp_socket *tcp_socket, uint32_t amount) {
-	struct list_head *list_item;
-	struct sk_buff *buffer_item;
-
-	list_for_each(list_item, &tcp_socket->write_queue.list) {
-		if(amount == 0 || (buffer_item = list_entry(list_item, struct sk_buff, list)) == NULL)
-			break;
-
-		tcp_out_send(tcp_socket, buffer_item);
-		tcp_socket->snd_nxt += buffer_item->payload_size;
-		tcp_socket->delayed_ack = 0;  // piggyback off
-
-		amount--;
-	}
-}
 
 void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len) {
 	struct sk_buff *buffer = tcp_create_buffer((uint16_t)data_len);
@@ -78,8 +62,10 @@ void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_le
 
 	memcpy(tcp_segment->data, data, (size_t)data_len);
 
-	tcp_out_queue_push(tcp_socket, buffer);
-	tcp_out_queue_send(tcp_socket, 1);
+	tcp_out_header(tcp_socket, buffer);
+
+	tcp_write_queue_push(tcp_socket, buffer);
+	tcp_write_queue_send(tcp_socket, 1);
 }
 
 
@@ -90,6 +76,7 @@ void tcp_out_ack(struct tcp_socket *tcp_socket) {
 	tcp_segment->ack = 1;
 	tcp_out_set_seqnums(tcp_socket, buffer, 0);
 
+	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 	skb_free(buffer);
 
@@ -115,8 +102,9 @@ void tcp_out_syn(struct tcp_socket *tcp_socket) {
 	memcpy(&tcp_segment->data[2], &mss, 2);
 
 	// Send it
-	tcp_out_send(tcp_socket, buffer);
-	skb_free(buffer);
+	tcp_out_header(tcp_socket, buffer);
+	tcp_write_queue_push(tcp_socket, buffer);
+	tcp_write_queue_send(tcp_socket, 1);
 
 	// Increase SND.NXT
 	tcp_socket->snd_nxt++;
@@ -130,6 +118,7 @@ void tcp_out_fin(struct tcp_socket *tcp_socket) {
 	tcp_segment->ack = 1;
 	tcp_out_set_seqnums(tcp_socket, buffer, 0);
 
+	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 	skb_free(buffer);
 }
@@ -142,6 +131,7 @@ void tcp_out_synack(struct tcp_socket *tcp_socket) {
 	tcp_segment->syn = 1;
 	tcp_out_set_seqnums(tcp_socket, buffer, 0);
 
+	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 	skb_free(buffer);
 }
@@ -153,6 +143,7 @@ void tcp_out_rst(struct tcp_socket *tcp_socket) {
 	tcp_segment->rst = 1;
 	tcp_out_set_seqnums(tcp_socket, buffer, 0);
 
+	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 }
 
@@ -164,6 +155,7 @@ void tcp_out_rstack(struct tcp_socket *tcp_socket) {
 	tcp_segment->rst = 1;
 	tcp_out_set_seqnums(tcp_socket, buffer, 0);
 
+	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 	skb_free(buffer);
 }

@@ -94,8 +94,8 @@ void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segm
 		tcp_socket->irs = tcp_segment->seq;
 		if(tcp_segment->ack) {
 			tcp_socket->snd_una = tcp_segment->ack_seq;
-			// TODO:  any segments on the retransmission queue which
-			//        are thereby acknowledged should be removed.
+			// remove SYN segment from retransmission queue
+			tcp_write_queue_clear(tcp_socket, tcp_socket->snd_una);
 		}
 
 		if(tcp_socket->snd_una > tcp_socket->iss) {
@@ -148,29 +148,6 @@ int tcp_accept_test(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segme
 	return 0;
 }
 
-void tcp_in_clear_queue(struct tcp_socket *tcp_socket, uint32_t seq_num) {
-	struct sk_buff *buffer_item;
-
-	while(1) {
-		if(list_empty(&tcp_socket->write_queue.list))
-			break;
-
-		buffer_item = list_first_entry(&tcp_socket->write_queue.list, struct sk_buff, list);
-
-		if(buffer_item == NULL || buffer_item->seq_end > seq_num)
-			break;
-
-		tcp_calc_rto(tcp_socket);
-
-		list_del(&buffer_item->list);
-		skb_free(buffer_item);
-	}
-
-	if(list_empty(&tcp_socket->write_queue.list)) {
-		tcp_socket->rto_expires = 0;
-	}
-}
-
 void tcp_in(struct eth_frame *frame) {
 	struct ipv4_packet *ip_packet = (struct ipv4_packet *) frame->payload;
 	struct tcp_segment *tcp_segment = (struct tcp_segment *) (ip_packet->data +
@@ -199,9 +176,9 @@ void tcp_in(struct eth_frame *frame) {
 	}
 
 	// Debug print
-	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | WS %d | MSS %d\n",
+	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | WS %d | MSS %d | SRTT %d\n",
 		   tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
-		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, tcp_socket->mss);
+		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, tcp_socket->mss, tcp_socket->srtt);
 
 	// Get options
 	struct tcp_options opts = {0};
@@ -325,7 +302,7 @@ void tcp_in(struct eth_frame *frame) {
 		case TCPS_ESTABLISHED:
 			if(tcp_socket->snd_una < tcp_segment->ack_seq <= tcp_socket->snd_nxt) {
 				tcp_socket->snd_una = tcp_segment->ack_seq;
-				tcp_in_clear_queue(tcp_socket, tcp_socket->snd_una);  // Clear write queue
+				tcp_write_queue_clear(tcp_socket, tcp_socket->snd_una);  // Clear write queue
 				tcp_socket->rto_expires = tcp_timer_get_ticks() + tcp_socket->rto;  // Restart RTO timer
 
 				// Set send window, but not if it's an old segment (snd_wl1, snd_wl2)

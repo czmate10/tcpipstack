@@ -17,6 +17,8 @@
 #define TCP_DEFAULT_MSS 536
 #define TCP_START_WINDOW_SIZE 29200
 
+
+// Options
 #define TCP_OPTIONS_END 0
 #define TCP_OPTIONS_NOOP 1
 #define TCP_OPTIONS_MSS 2
@@ -31,20 +33,8 @@
 #define TCP_T_FAST_INTERVAL 100  // fast timer should run every 100ms, TODO: delayed ack timer
 #define TCP_T_COUNT 4  // four timers
 
-#define TCP_T_RETRANSMISSION 0
-#define TCP_T_PERSIST 1
-#define TCP_T_KEEPALIVE 2  // keep-alive OR connection-establishment timer
-#define TCP_T_2MSL 3
 
-#define TCP_TV_MSL 120 // maximum segment life in seconds, RFC 793 states 2 minutes
-#define TCP_TV_RETRANSMISSION_MIN 1
-#define TCP_TV_RETRANSMISSION_MAX 64
-#define TCP_TV_PERSIST_MIN 5
-#define TCP_TV_PERSIST_MAX 64
-#define TCP_TV_KEEP_INIT 75
-#define TCP_TV_KEEP_IDLE 7200
-
-#define TCP_MAX_RETRANSMISSIONS 12
+// RTO
 #define TCP_RTO_ALPHA 0.125
 #define TCP_RTO_BETA 0.25
 #define TCP_RTO_CLOCK_GRANUALITY 100  // 100 ms
@@ -103,7 +93,6 @@ struct tcp_socket {
 	uint16_t mss;
 	uint8_t delayed_ack;  // piggyback ACKs
 
-	uint32_t rtt;
 	int32_t srtt;  // smoothed RTT
 	int32_t rttvar;  // round-trip time variation
 	uint32_t rto;  // Retransmission timeout
@@ -147,10 +136,7 @@ uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len,
 void tcp_in(struct eth_frame *frame);
 struct sk_buff *tcp_create_buffer(uint16_t payload_size);
 
-
-void tcp_calc_rto(struct tcp_socket *tcp_socket);
-
-void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
+void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
 void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);
 void tcp_out_ack(struct tcp_socket *tcp_socket);
 void tcp_out_syn(struct tcp_socket *tcp_socket);
@@ -159,14 +145,16 @@ void tcp_out_synack(struct tcp_socket *tcp_socket);
 void tcp_out_rst(struct tcp_socket *tcp_socket);
 void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
-void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
-void tcp_out_queue_send(struct tcp_socket *tcp_socket, uint32_t amount);
+void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
+void tcp_write_queue_send(struct tcp_socket *tcp_socket, uint32_t amount);
+void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
 
 uint32_t tcp_timer_get_ticks();
 void *tcp_timer_fast(void *args);
 void *tcp_timer_slow(void *args);
-
+void tcp_calc_rto(struct tcp_socket *tcp_socket);
 
 void tcp_socket_free(struct tcp_socket *tcp_socket);
+void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
 struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
 struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
