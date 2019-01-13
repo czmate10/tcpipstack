@@ -9,7 +9,7 @@
 
 
 uint8_t tcp_in_options(struct tcp_segment *tcp_segment, struct tcp_options *opts) {
-	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 4);
+	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 2);
 	if (options_size == 0) {
 		opts->mss = TCP_DEFAULT_MSS; // Default
 		return options_size;
@@ -200,7 +200,10 @@ void tcp_in(struct eth_frame *frame) {
 	// First check if we are in one of these 3 states
 	if(tcp_socket->state == TCPS_SYN_SENT) {
 		tcp_in_syn_sent(tcp_socket, tcp_segment, &opts);
-		return;
+		if(tcp_socket->state != TCPS_ESTABLISHED)  // if ACK segment was valid, continue processing
+			return;
+		else
+			goto check_urg;
 	}
 	else if(tcp_socket->state == TCPS_LISTEN) {
 		tcp_in_listen(tcp_socket, tcp_segment, &opts);
@@ -332,6 +335,8 @@ void tcp_in(struct eth_frame *frame) {
 	}
 
 	// 6: check URG bit
+check_urg:
+
 
 	// 7: process segment text
 	switch(tcp_socket->state) {
