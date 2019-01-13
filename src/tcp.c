@@ -129,11 +129,12 @@ struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t
 	memset(tcp_socket, 0, sizeof(struct tcp_socket));
 
 	tcp_socket->state = TCPS_CLOSED;
+	tcp_socket->mss = TCP_DEFAULT_MSS;
 	tcp_socket->rto = 1000;  // RFC6298: 1 second or greater first
 	tcp_socket->iss = (uint32_t)lrand48();
 	tcp_socket->snd_nxt = tcp_socket->iss;
 	tcp_socket->snd_una = tcp_socket->iss;
-	tcp_socket->rcv_wnd = TCP_START_WINDOW_SIZE;
+	tcp_socket->rcv_wnd = TCP_INITIAL_WINDOW;
 
 	tcp_socket->sock.protocol = IPPROTO_TCP;
 	tcp_socket->sock.source_ip = source_ip;

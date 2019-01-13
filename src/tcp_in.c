@@ -92,6 +92,18 @@ void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segm
 	if(tcp_segment->syn) {
 		tcp_socket->rcv_nxt = tcp_segment->seq + 1;
 		tcp_socket->irs = tcp_segment->seq;
+
+		// Set MSS
+		tcp_socket->mss = min(tcp_socket->mss, opts->mss);
+
+		// Set slow start window size - see RFC5681 3.1
+		if(tcp_socket->mss > 2190)
+			tcp_socket->cwnd = (uint32_t)(tcp_socket->mss * 2);
+		else if(tcp_socket->mss > 1095)
+			tcp_socket->cwnd = (uint32_t)(tcp_socket->mss * 3);
+		else
+			tcp_socket->cwnd = (uint32_t)(tcp_socket->mss * 4);
+
 		if(tcp_segment->ack) {
 			tcp_socket->snd_una = tcp_segment->ack_seq;
 			// remove SYN segment from retransmission queue
@@ -201,7 +213,7 @@ void tcp_in(struct eth_frame *frame) {
 
 	// 1: check sequence number
 	if(!tcp_accept_test(tcp_socket, tcp_segment, tcp_data_size)) {
-		fprintf(stderr, "Invalid TCP ack sequence num: %u - sending RST\n", tcp_segment->ack_seq);
+		fprintf(stderr, "Invalid TCP ack sequence num: %u - sending ACK\n", tcp_segment->ack_seq);
 
 		if(!tcp_segment->rst)
 			tcp_out_ack(tcp_socket);

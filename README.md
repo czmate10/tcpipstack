@@ -1,5 +1,7 @@
 # User-space TCP/IP stack
-I started working on this project to learn more about TCP and IPv4, and possibly IPv6 later on.
+I started working on this project to learn more about TCP and IPv4, and possibly IPv6 later on.  
+Right now it's just a very basic TCP implementation that is able to connect, disconnect, send data(if size < MSS) and read incoming segments' payload.  
+Please refer to [src/main.c](https://github.com/czmate10/tcpipstack/blob/master/src/main.c) to see an example HTTP GET request.
 
 # Requirements
 - TAP device:
@@ -9,6 +11,14 @@ ip link set dev tap0 up
 ip route add dev tap0 10.0.0.0/24
 ip address add dev tap0 local 10.0.0.10
 ```
+
+# To-do
+- Clean up code, add documentation for functions and unit tests
+- Use ARP requests to look up physical address of IP destination
+- Add IPv6 support
+- TCP write fragmentation
+- TCP congestion control
+- TCP selective ARQ
 
 # Thanks to
 - [level-ip by saminiir](https://github.com/saminiir/level-ip)

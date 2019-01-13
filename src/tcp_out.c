@@ -5,9 +5,14 @@
 #include "ipv4.h"
 
 
-struct sk_buff *tcp_alloc(uint32_t payload_size) {
-	struct sk_buff *skb = skb_alloc(ETHERNET_HEADER_SIZE + IP_HEADER_SIZE + TCP_HEADER_SIZE + payload_size);
-	return skb;
+
+struct sk_buff *tcp_out_create_buffer(uint16_t payload_size) {
+	struct sk_buff *buffer = skb_alloc(ETHERNET_HEADER_SIZE + IP_HEADER_SIZE + TCP_HEADER_SIZE + payload_size);
+	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
+
+	tcp_segment->data_offset = TCP_HEADER_SIZE >> 2;
+
+	return buffer;
 }
 
 
@@ -53,7 +58,7 @@ void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 
 
 void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len) {
-	struct sk_buff *buffer = tcp_create_buffer((uint16_t)data_len);
+	struct sk_buff *buffer = tcp_out_create_buffer((uint16_t) data_len);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->psh = 1;
@@ -70,7 +75,7 @@ void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_le
 
 
 void tcp_out_ack(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct sk_buff *buffer = tcp_out_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->ack = 1;
@@ -84,7 +89,7 @@ void tcp_out_ack(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_out_syn(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(4);
+	struct sk_buff *buffer = tcp_out_create_buffer(4);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	// Set state
@@ -111,7 +116,7 @@ void tcp_out_syn(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_out_fin(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct sk_buff *buffer = tcp_out_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->fin = 1;
@@ -124,7 +129,7 @@ void tcp_out_fin(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_out_synack(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct sk_buff *buffer = tcp_out_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->ack = 0;
@@ -137,7 +142,7 @@ void tcp_out_synack(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_out_rst(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct sk_buff *buffer = tcp_out_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->rst = 1;
@@ -148,7 +153,7 @@ void tcp_out_rst(struct tcp_socket *tcp_socket) {
 }
 
 void tcp_out_rstack(struct tcp_socket *tcp_socket) {
-	struct sk_buff *buffer = tcp_create_buffer(0);
+	struct sk_buff *buffer = tcp_out_create_buffer(0);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
 	tcp_segment->ack = 1;
@@ -158,14 +163,4 @@ void tcp_out_rstack(struct tcp_socket *tcp_socket) {
 	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
 	skb_free(buffer);
-}
-
-
-struct sk_buff *tcp_create_buffer(uint16_t payload_size) {
-	struct sk_buff *buffer = tcp_alloc(payload_size);
-	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
-
-	tcp_segment->data_offset = TCP_HEADER_SIZE >> 2;
-
-	return buffer;
 }

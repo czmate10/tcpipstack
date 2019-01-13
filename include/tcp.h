@@ -14,8 +14,8 @@
 
 #define TCP_HEADER_SIZE 20
 #define TCP_OPTS_MAXLEN 32
-#define TCP_DEFAULT_MSS 536
-#define TCP_START_WINDOW_SIZE 29200
+#define TCP_DEFAULT_MSS 1460
+#define TCP_INITIAL_WINDOW 64240  // initial window size
 
 
 // Options
@@ -98,6 +98,9 @@ struct tcp_socket {
 	uint32_t rto;  // Retransmission timeout
 	uint32_t rto_expires;  // Tick count when RTO expires
 
+	uint32_t cwnd;  // sender-side limit on the amount of data the sender can transmit before receiving an ACK
+	uint32_t rwnd;  // receiver-side limit on the amount of outstanding data
+
 
 	uint16_t timers[TCP_T_COUNT];
 
@@ -134,7 +137,7 @@ static inline void tcp_segment_ntoh(struct tcp_segment *tcp_segment) {
 
 uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip);
 void tcp_in(struct eth_frame *frame);
-struct sk_buff *tcp_create_buffer(uint16_t payload_size);
+struct sk_buff *tcp_out_create_buffer(uint16_t payload_size);
 
 void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
 void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);

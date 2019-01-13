@@ -137,7 +137,6 @@ struct tcp_socket *test_connect() {
 	pthread_mutex_lock(&threads_mutex);
 	struct tcp_socket *tcp_socket = tcp_socket_new(device->ipv4, dest_ip, port, 80);
 	tcp_socket->sock.dev = device;
-	tcp_socket->mss = 1460;
 	tcp_out_syn(tcp_socket);
 	pthread_mutex_unlock(&threads_mutex);
 
