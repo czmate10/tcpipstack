@@ -167,6 +167,9 @@ int test_send(struct tcp_socket *tcp_socket, uint8_t *data, size_t data_len) {
 int main() {
 	setup();
 
+	getchar();
+	getchar();
+
 	// test tcp_socket
 	struct tcp_socket * tcp_socket = test_connect();
 

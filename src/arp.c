@@ -8,7 +8,10 @@
 #include "arp.h"
 #include "tap.h"
 #include "eth.h"
+#include "skbuff.h"
 
+
+static const uint8_t BROADCAST_ADDRESS[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address) {
 	for(int i = 0; i < ARP_CACHE_SIZE; i++) {
@@ -24,7 +27,7 @@ struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address) {
 	return NULL;
 }
 
-int arp_add_entry_ipv4(struct arp_packet *packet, struct arp_payload* payload) {
+int arp_add_entry_ipv4(struct arp_packet *packet) {
 	struct arp_entry *entry = NULL;
 
 	for(int i = 0; i < ARP_CACHE_SIZE; i++) {
@@ -39,35 +42,37 @@ int arp_add_entry_ipv4(struct arp_packet *packet, struct arp_payload* payload) {
 	}
 
 	entry->protocol_type = packet->protocol_type;
-	entry->address = payload->source_address;
-	memcpy(entry->mac, payload->source_mac, sizeof(entry->mac));
+	entry->address = packet->source_address;
+	memcpy(entry->mac, packet->source_mac, sizeof(entry->mac));
 
 	return 1;
 }
 
 
-int arp_send_reply(struct net_dev* dev, struct eth_frame *eth_frame) {
-	struct arp_packet *arp_packet = (struct arp_packet *)eth_frame->payload;
-	struct arp_payload *entry_data = (struct arp_payload *)arp_packet->data;
+int arp_send_reply(struct net_dev* dev, struct arp_packet *packet) {
+	struct sk_buff *buffer = skb_alloc(ETHERNET_HEADER_SIZE + sizeof(struct arp_packet));
 
-	// Swap hardware addresses
-	memcpy(entry_data->dest_mac, entry_data->source_mac, sizeof(entry_data->dest_mac));
-	memcpy(entry_data->source_mac, dev->hwaddr, sizeof(entry_data->source_mac));
+	buffer->dev = dev;
+	struct eth_frame *eth_frame = (struct eth_frame *)buffer->data;
+	struct arp_packet *packet_resp = (struct arp_packet *)eth_frame->payload;
+
+	// Header
+	packet_resp->hw_type = htons(ARP_HWTYPE_ETHERNET);
+	packet_resp->protocol_type = htons(ETH_P_IP);
+	packet_resp->hw_size = ARP_HWSIZE_ETHERNET;
+	packet_resp->protocol_size = ARP_PROTOLEN_IPV4;
+	packet_resp->op_code = htons(ARP_OP_REPLY);
+
+	// Copy hardware addresses
+	memcpy(packet_resp->source_mac, dev->hwaddr, ARP_HWSIZE_ETHERNET);
+	memcpy(packet_resp->dest_mac, packet->source_mac, ARP_HWSIZE_ETHERNET);
 
 	// Swap IPv4 addresses
-	entry_data->dest_address = entry_data->source_address;
-	entry_data->source_address = dev->ipv4;
-
-	// Set OP field
-	arp_packet->op_code = ARP_OP_REPLY;
-
-	// Convert endianness
-	arp_packet->op_code = htons(arp_packet->op_code);
-	arp_packet->protocol_type = htons(arp_packet->protocol_type);
-	arp_packet->hw_type = htons(arp_packet->hw_type);
+	packet_resp->source_address = dev->ipv4;
+	packet_resp->dest_address = packet->source_address;
 
 	// Send it
-	return eth_write_raw(dev, entry_data->dest_mac, ETH_P_ARP, eth_frame, sizeof(arp_packet) + sizeof(struct arp_payload));
+	return eth_write(dev, BROADCAST_ADDRESS, ETH_P_ARP, buffer);
 }
 
 
@@ -99,20 +104,20 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 			return -1;
 		}
 
-		struct arp_payload *entry_data = (struct arp_payload *)arp_packet->data;
-		struct arp_entry *entry = arp_get_entry_ipv4(arp_packet->protocol_type, entry_data->source_address);
+		struct arp_entry *entry = arp_get_entry_ipv4(arp_packet->protocol_type, arp_packet->source_address);
 
 		// insert to cache if it's not in it yet
 		if(!entry) {
-			arp_add_entry_ipv4(arp_packet, entry_data);
+			arp_add_entry_ipv4(arp_packet);
 		}
 
-		if(entry_data->dest_address != dev->ipv4) {
+		if(arp_packet->dest_address != dev->ipv4) {
 			printf("ARP not for us, ignore\n");
 			return -1;
 		}
 
-		return arp_send_reply(dev, eth_frame);
+		printf("ARP reply...\n");
+		return arp_send_reply(dev, arp_packet);
 	}
 	else {
 		fprintf(stderr, "only IPv4 addresses are supported for ARP yet. requested: %x", arp_packet->protocol_type);
