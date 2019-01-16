@@ -121,6 +121,8 @@ void finish() {
 	for(int i = 0; i < THREAD_COUNT; i++) {
 		pthread_join(threads[i], NULL);
 	}
+
+	arp_free_cache();
 }
 
 

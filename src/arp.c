@@ -11,41 +11,40 @@
 #include "skbuff.h"
 
 
-static const uint8_t BROADCAST_ADDRESS[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static uint8_t BROADCAST_ADDRESS[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static LIST_HEAD(tcp_socket_list);
+
+void arp_free_cache() {
+	struct list_head *list_item, *tmp;
+	struct arp_entry *entry;
+
+	list_for_each_safe(list_item, tmp, &tcp_socket_list) {
+		entry = list_entry(list_item, struct arp_entry, list);
+		list_del(list_item);
+		free(entry);
+	}
+}
 
 struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address) {
-	for(int i = 0; i < ARP_CACHE_SIZE; i++) {
-		struct arp_entry *entry = &arp_cache[i];
-		if(entry->protocol_type == 0)  // We have no entries in the cache after this, TODO: find a better way to do this check
-			break;
+	struct list_head *list_item;
+	struct arp_entry *entry;
 
-		if(entry->protocol_type == protocol_type && entry->address == address) {
+	list_for_each(list_item, &tcp_socket_list) {
+		entry = list_entry(list_item, struct arp_entry, list);
+		if(entry->protocol_type == protocol_type && entry->address == address)
 			return entry;
-		}
 	}
 
 	return NULL;
 }
 
-int arp_add_entry_ipv4(struct arp_packet *packet) {
-	struct arp_entry *entry = NULL;
-
-	for(int i = 0; i < ARP_CACHE_SIZE; i++) {
-		entry = &arp_cache[i];
-		if(entry->protocol_type == 0)  // We have no entries in the cache after this
-			break;
-	}
-
-	if(entry->protocol_type != 0) {  // We have ran out of space in our cache, TODO: do something when this happens
-		fprintf(stderr, "ARP cache is out of space!\n");
-		return 0;
-	}
-
+void arp_add_entry_ipv4(struct arp_packet *packet) {
+	struct arp_entry *entry = malloc(sizeof(struct arp_entry));
 	entry->protocol_type = packet->protocol_type;
 	entry->address = packet->source_address;
 	memcpy(entry->mac, packet->source_mac, sizeof(entry->mac));
 
-	return 1;
+	list_add(&entry->list, &tcp_socket_list);
 }
 
 
@@ -72,7 +71,10 @@ int arp_send_reply(struct net_dev* dev, struct arp_packet *packet) {
 	packet_resp->dest_address = packet->source_address;
 
 	// Send it
-	return eth_write(dev, BROADCAST_ADDRESS, ETH_P_ARP, buffer);
+	int bytes = eth_write(dev, BROADCAST_ADDRESS, ETH_P_ARP, buffer);
+	skb_free(buffer);
+
+	return bytes;
 }
 
 

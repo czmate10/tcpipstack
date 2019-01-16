@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "tap.h"
 #include "eth.h"
+#include "list.h"
 
 #define ARP_HWTYPE_ETHERNET 1
 #define ARP_HWSIZE_ETHERNET 6
@@ -28,16 +29,14 @@ struct arp_packet
 
 struct arp_entry
 {
+	struct list_head list;
 	uint16_t protocol_type;
 	uint8_t mac[6];
 	uint32_t address;
 };
 
-
-struct arp_entry arp_cache[ARP_CACHE_SIZE];
-
-void arp_free_caches();
+void arp_free_cache();
 struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address);
-int arp_add_entry_ipv4(struct arp_packet *packet);
+void arp_add_entry_ipv4(struct arp_packet *packet);
 int arp_send_reply(struct net_dev* dev, struct arp_packet *arp_packet);
 int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame);
