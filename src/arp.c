@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #include "arp.h"
 #include "tap.h"
 #include "eth.h"
@@ -12,41 +13,65 @@
 
 
 static uint8_t BROADCAST_ADDRESS[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-static LIST_HEAD(tcp_socket_list);
+static LIST_HEAD(arp_entry_list);
+pthread_mutex_t arp_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void arp_free_cache() {
 	struct list_head *list_item, *tmp;
 	struct arp_entry *entry;
 
-	list_for_each_safe(list_item, tmp, &tcp_socket_list) {
+	pthread_mutex_lock(&arp_mutex);
+
+	list_for_each_safe(list_item, tmp, &arp_entry_list) {
 		entry = list_entry(list_item, struct arp_entry, list);
+
+		// Clean up waiting list too
+		while(!list_empty(&entry->waiting_list)) {
+			struct sk_buff *buffer = list_first_entry(&entry->waiting_list, struct sk_buff, list);
+
+			list_del(entry->waiting_list.next);
+			skb_free(buffer);
+		}
+
 		list_del(list_item);
 		free(entry);
 	}
+
+	pthread_mutex_unlock(&arp_mutex);
 }
 
-struct arp_entry* arp_get_entry_ipv4(uint16_t protocol_type, uint32_t address) {
+struct arp_entry* arp_get_entry(uint16_t protocol_type, uint32_t address) {
 	struct list_head *list_item;
 	struct arp_entry *entry;
 
-	list_for_each(list_item, &tcp_socket_list) {
+	pthread_mutex_lock(&arp_mutex);
+
+	list_for_each(list_item, &arp_entry_list) {
 		entry = list_entry(list_item, struct arp_entry, list);
-		if(entry->protocol_type == protocol_type && entry->address == address)
+		if(entry->protocol_type == protocol_type && entry->address == address) {
+			pthread_mutex_unlock(&arp_mutex);
 			return entry;
+		}
 	}
+
+	pthread_mutex_unlock(&arp_mutex);
 
 	return NULL;
 }
 
-void arp_add_entry_ipv4(struct arp_packet *packet) {
+struct arp_entry *arp_add_entry_active(uint8_t *mac_address, uint32_t ipv4_address) {
+	pthread_mutex_lock(&arp_mutex);
+
 	struct arp_entry *entry = malloc(sizeof(struct arp_entry));
-	entry->protocol_type = packet->protocol_type;
-	entry->address = packet->source_address;
-	memcpy(entry->mac, packet->source_mac, sizeof(entry->mac));
+	entry->state = ARP_ENTRY_STATE_ACTIVE;
+	entry->protocol_type = ETH_P_IP;
+	entry->address = ipv4_address;
+	memcpy(entry->mac, mac_address, sizeof(entry->mac));
+	list_add(&entry->list, &arp_entry_list);
 
-	list_add(&entry->list, &tcp_socket_list);
+	pthread_mutex_unlock(&arp_mutex);
+	return entry;
 }
-
 
 int arp_send_reply(struct net_dev* dev, struct arp_packet *packet) {
 	struct sk_buff *buffer = skb_alloc(ETHERNET_HEADER_SIZE + sizeof(struct arp_packet));
@@ -71,10 +96,49 @@ int arp_send_reply(struct net_dev* dev, struct arp_packet *packet) {
 	packet_resp->dest_address = packet->source_address;
 
 	// Send it
-	int bytes = eth_write(dev, BROADCAST_ADDRESS, ETH_P_ARP, buffer);
-	skb_free(buffer);
+	return eth_write(BROADCAST_ADDRESS, ETH_P_ARP, buffer);
+}
 
-	return bytes;
+struct arp_entry *arp_send_request(struct net_dev* dev, uint32_t ipv4_address) {
+	// First create the entry in SENT state
+	pthread_mutex_lock(&arp_mutex);
+
+	struct arp_entry *entry = malloc(sizeof(struct arp_entry));
+	entry->state = ARP_ENTRY_STATE_WAITING;
+	entry->protocol_type = ETH_P_IP;
+	entry->address = ipv4_address;
+	entry->waiting_list.next = entry->waiting_list.prev = &entry->waiting_list;
+	memset(entry->mac, 0, ARP_HWSIZE_ETHERNET);
+	list_add(&entry->list, &arp_entry_list);
+
+	pthread_mutex_unlock(&arp_mutex);
+
+	// Send the request
+	struct sk_buff *buffer = skb_alloc(ETHERNET_HEADER_SIZE + sizeof(struct arp_packet));
+
+	buffer->dev = dev;
+	struct eth_frame *eth_frame = (struct eth_frame *)buffer->data;
+	struct arp_packet *packet = (struct arp_packet *)eth_frame->payload;
+
+	// Header
+	packet->hw_type = htons(ARP_HWTYPE_ETHERNET);
+	packet->protocol_type = htons(ETH_P_IP);
+	packet->hw_size = ARP_HWSIZE_ETHERNET;
+	packet->protocol_size = ARP_PROTOLEN_IPV4;
+	packet->op_code = htons(ARP_OP_REQUEST);
+
+	// Copy hardware addresses
+	memcpy(packet->source_mac, dev->hwaddr, ARP_HWSIZE_ETHERNET);
+	memcpy(packet->dest_mac, BROADCAST_ADDRESS, ARP_HWSIZE_ETHERNET);
+
+	// Swap IPv4 addresses
+	packet->source_address = dev->ipv4;
+	packet->dest_address = ipv4_address;
+
+	// Send it
+	eth_write(BROADCAST_ADDRESS, ETH_P_ARP, buffer);
+
+	return entry;
 }
 
 
@@ -106,11 +170,24 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 			return -1;
 		}
 
-		struct arp_entry *entry = arp_get_entry_ipv4(arp_packet->protocol_type, arp_packet->source_address);
+		struct arp_entry *entry = arp_get_entry(arp_packet->protocol_type, arp_packet->source_address);
 
-		// insert to cache if it's not in it yet
-		if(!entry) {
-			arp_add_entry_ipv4(arp_packet);
+		// check if IP is not in cache yet, or we were waiting for reply
+		if(!entry)
+			arp_add_entry_active(arp_packet->source_mac, arp_packet->source_address);
+
+		else if(entry->state == ARP_ENTRY_STATE_WAITING) {
+			// Received reply for sent request
+			pthread_mutex_lock(&arp_mutex);
+			memcpy(entry->mac, arp_packet->source_mac, ARP_HWSIZE_ETHERNET);
+			entry->state = ARP_ENTRY_STATE_ACTIVE;
+			pthread_mutex_unlock(&arp_mutex);
+
+//			struct list_head *list_item;
+//			list_for_each(list_item, &entry->waiting_list) {
+//				struct sk_buff *buffer = list_entry(list_item, struct sk_buff, list);
+//				eth_write(entry->mac, entry->protocol_type, buffer);
+//			}
 		}
 
 		if(arp_packet->dest_address != dev->ipv4) {
@@ -118,8 +195,10 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 			return -1;
 		}
 
-		printf("ARP reply...\n");
-		return arp_send_reply(dev, arp_packet);
+		if(arp_packet->op_code == ARP_OP_REQUEST)
+			return arp_send_reply(dev, arp_packet);
+		else
+			return 0;
 	}
 	else {
 		fprintf(stderr, "only IPv4 addresses are supported for ARP yet. requested: %x", arp_packet->protocol_type);

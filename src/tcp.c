@@ -170,6 +170,7 @@ struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t
 }
 
 void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
+	buffer->manual_free = 1;
 	tcp_socket->write_queue.len++;
 	list_add_tail(&buffer->list, &tcp_socket->write_queue.list);
 }
@@ -208,6 +209,7 @@ void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num) {
 		skb_free(buffer_item);
 	}
 
+	// Still have unacknowledged packets
 	if(list_empty(&tcp_socket->write_queue.list)) {
 		tcp_socket->rto_expires = 0;
 	}

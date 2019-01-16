@@ -83,7 +83,6 @@ void tcp_out_ack(struct tcp_socket *tcp_socket) {
 
 	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
-	skb_free(buffer);
 
 	tcp_socket->delayed_ack = 0;
 }
@@ -125,7 +124,6 @@ void tcp_out_fin(struct tcp_socket *tcp_socket) {
 
 	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
-	skb_free(buffer);
 }
 
 void tcp_out_synack(struct tcp_socket *tcp_socket) {
@@ -138,7 +136,6 @@ void tcp_out_synack(struct tcp_socket *tcp_socket) {
 
 	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
-	skb_free(buffer);
 }
 
 void tcp_out_rst(struct tcp_socket *tcp_socket) {
@@ -162,5 +159,4 @@ void tcp_out_rstack(struct tcp_socket *tcp_socket) {
 
 	tcp_out_header(tcp_socket, buffer);
 	tcp_out_send(tcp_socket, buffer);
-	skb_free(buffer);
 }

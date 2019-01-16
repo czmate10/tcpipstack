@@ -4,7 +4,7 @@
 #include "skbuff.h"
 #include "tap.h"
 
-#define ETHERNET_MAX_SIZE 1500
+#define ETHERNET_MAX_PAYLOAD_SIZE 1500
 #define ETHERNET_HEADER_SIZE 14
 
 
@@ -22,4 +22,4 @@ static inline struct eth_frame *eth_frame_from_skb(struct sk_buff *buff) {
 }
 
 uint16_t eth_read(struct net_dev *dev, struct eth_frame *frame);
-int eth_write(struct net_dev *dev, uint8_t dest_mac[], uint16_t eth_type, struct sk_buff *buffer);
+int eth_write(uint8_t dest_mac[], uint16_t eth_type, struct sk_buff *buffer);

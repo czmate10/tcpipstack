@@ -29,8 +29,20 @@ int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer) {
 	ip_packet->checksum = 0;
 	ip_packet->checksum = checksum((uint16_t *) ip_packet, IP_HEADER_SIZE, 0);
 
-	uint8_t dest_mac[] = {0x46, 0x48, 0x47, 0x8f, 0xb4, 0xd4};  // TODO: lookup in ARP list
-	return eth_write(sock->dev, dest_mac, ETH_P_IP, buffer);
+	buffer->dev = sock->dev;
+
+	struct arp_entry *arp_entry = arp_get_entry(ETH_P_IP, sock->dest_ip);
+	if(arp_entry == NULL) {
+		arp_entry = arp_send_request(sock->dev, sock->dest_ip);
+//		list_add_tail(&buffer->list, &arp_entry->waiting_list);
+		return -1;
+	}
+	else if(arp_entry->state == ARP_ENTRY_STATE_WAITING) {
+//		list_add_tail(&buffer->list, &arp_entry->waiting_list);
+		return -1;
+	}
+	else
+		return eth_write(arp_entry->mac, ETH_P_IP, buffer);
 }
 
 

@@ -65,12 +65,12 @@ void *main_loop(void *args) {
 		}
 
 		if(poll_fd.revents & POLLIN) {
-			struct eth_frame *eth_frame = malloc(ETHERNET_MAX_SIZE);
+			struct eth_frame *eth_frame = malloc(ETHERNET_MAX_PAYLOAD_SIZE);
 			if(eth_frame == NULL) {
 				perror("could not allocate memory for ethernet frame");
 				exit(1);
 			}
-			memset(eth_frame, 0, ETHERNET_MAX_SIZE);
+			memset(eth_frame, 0, ETHERNET_MAX_PAYLOAD_SIZE);
 
 			uint16_t num_bytes = eth_read(device, eth_frame);
 			pthread_mutex_lock(threads_mutex);
