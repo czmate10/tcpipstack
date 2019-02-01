@@ -6,8 +6,6 @@
 #include "tap.h"
 
 struct sk_buff {
-	struct list_head list;
-
 	uint8_t manual_free;  // eth_write() should not free() it
 	struct net_dev* dev;
 	uint32_t size;

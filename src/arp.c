@@ -185,7 +185,6 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 			pthread_mutex_lock(&arp_mutex);
 			memcpy(entry->mac, arp_packet->source_mac, ARP_HWSIZE_ETHERNET);
 			entry->state = ARP_ENTRY_STATE_ACTIVE;
-			pthread_mutex_unlock(&arp_mutex);
 
 			while(entry->buffer_head != NULL) {
 				eth_write(entry->mac, entry->protocol_type, entry->buffer_head->buffer);
@@ -194,6 +193,8 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 				free(entry->buffer_head);
 				entry->buffer_head = buffer_next;
 			}
+
+			pthread_mutex_unlock(&arp_mutex);
 		}
 
 		if(arp_packet->dest_address != dev->ipv4) {
@@ -218,6 +219,8 @@ void arp_add_to_buffer(struct arp_entry *arp_entry, struct sk_buff *sk_buff) {
 	arp_buffer->next = NULL;
 	arp_buffer->buffer = sk_buff;
 
+	pthread_mutex_lock(&arp_mutex);
+
 	if(arp_entry->buffer_head == NULL)
 		arp_entry->buffer_head = arp_buffer;
 	else {
@@ -227,4 +230,6 @@ void arp_add_to_buffer(struct arp_entry *arp_entry, struct sk_buff *sk_buff) {
 
 		tail->next = arp_buffer;
 	}
+
+	pthread_mutex_unlock(&arp_mutex);
 }

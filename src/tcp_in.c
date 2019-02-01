@@ -188,9 +188,9 @@ void tcp_in(struct eth_frame *frame) {
 	}
 
 	// Debug print
-	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | WS %d | MSS %d | SRTT %d\n",
+	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | ACK SEQ %u | WS %d | MSS %d | SRTT %d\n",
 		   tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
-		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->window_size, tcp_socket->mss, tcp_socket->srtt);
+		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->ack_seq, tcp_segment->window_size, tcp_socket->mss, tcp_socket->srtt);
 
 	// Get options
 	struct tcp_options opts = {0};

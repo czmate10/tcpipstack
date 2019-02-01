@@ -77,16 +77,16 @@ struct tcp_segment {
 	uint8_t data[];
 }  __attribute__((packed));
 
-struct data_queue {
-	struct list_head list;
-	uint16_t len;
+struct tcp_buffer_queue_entry {
+	struct tcp_buffer_queue_entry *next;
+	struct sk_buff *sk_buff;
 };
 
 struct tcp_socket {
 	struct list_head list;
 	struct sock sock;
-	struct data_queue write_queue;
-	struct data_queue read_queue;
+	struct tcp_buffer_queue_entry *write_queue_head;
+	struct tcp_buffer_queue_entry *read_queue_head;
 
 	// TCP Control Block
 	enum tcp_state state;
@@ -148,7 +148,7 @@ void tcp_out_synack(struct tcp_socket *tcp_socket);
 void tcp_out_rst(struct tcp_socket *tcp_socket);
 void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
-void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
+void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff);
 void tcp_write_queue_send(struct tcp_socket *tcp_socket, uint32_t amount);
 void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
 

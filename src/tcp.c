@@ -142,9 +142,6 @@ struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t
 	tcp_socket->sock.source_port = source_port;
 	tcp_socket->sock.dest_port = dest_port;
 
-	tcp_socket->write_queue.list.next = tcp_socket->write_queue.list.prev = &tcp_socket->write_queue.list;
-	tcp_socket->read_queue.list.next = tcp_socket->read_queue.list.prev = &tcp_socket->read_queue.list;
-
 	list_add(&tcp_socket->list, &tcp_socket_list);
 
 	return tcp_socket;
@@ -169,48 +166,53 @@ struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t
 	return NULL;
 }
 
-void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
-	buffer->manual_free = 1;
-	tcp_socket->write_queue.len++;
-	list_add_tail(&buffer->list, &tcp_socket->write_queue.list);
+void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff) {
+	struct tcp_buffer_queue_entry *buffer_queue_entry = malloc(sizeof(struct tcp_buffer_queue_entry));
+	buffer_queue_entry->next = NULL;
+	buffer_queue_entry->sk_buff = sk_buff;
+
+	if(tcp_socket->write_queue_head == NULL)
+		tcp_socket->write_queue_head = buffer_queue_entry;
+	else {
+		struct tcp_buffer_queue_entry *tail = tcp_socket->write_queue_head;
+		while(tail->next != NULL)
+			tail = tail->next;
+
+		tail->next = buffer_queue_entry;
+	}
+
+	sk_buff->manual_free = 1;  // don't free() when calling eth_write()
 }
 
 void tcp_write_queue_send(struct tcp_socket *tcp_socket, uint32_t amount) {
-	struct list_head *list_item;
-	struct sk_buff *buffer_item;
+	struct tcp_buffer_queue_entry *buffer_queue_entry = tcp_socket->write_queue_head;
 
-	list_for_each(list_item, &tcp_socket->write_queue.list) {
-		if(amount == 0 || (buffer_item = list_entry(list_item, struct sk_buff, list)) == NULL)
-			break;
-
-		tcp_out_send(tcp_socket, buffer_item);
-		tcp_socket->snd_nxt += buffer_item->payload_size;
+	while(buffer_queue_entry != NULL && amount != 0) {
+		tcp_out_send(tcp_socket, buffer_queue_entry->sk_buff);
+		tcp_socket->snd_nxt += buffer_queue_entry->sk_buff->payload_size;
 		tcp_socket->delayed_ack = 0;  // piggyback off
 
 		amount--;
+		buffer_queue_entry = buffer_queue_entry->next;
 	}
 }
 
 void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num) {
-	struct sk_buff *buffer_item;
-
-	while(1) {
-		if(list_empty(&tcp_socket->write_queue.list))
-			break;
-
-		buffer_item = list_first_entry(&tcp_socket->write_queue.list, struct sk_buff, list);
-
-		if(buffer_item == NULL || buffer_item->seq_end > seq_num)
+	while(tcp_socket->write_queue_head != NULL) {
+		if(tcp_socket->write_queue_head->sk_buff->seq_end > seq_num)
 			break;
 
 		tcp_calc_rto(tcp_socket);
 
-		list_del(&buffer_item->list);
-		skb_free(buffer_item);
+		skb_free(tcp_socket->write_queue_head->sk_buff);
+
+		struct tcp_buffer_queue_entry *buffer_queue_entry_next = tcp_socket->write_queue_head->next;
+		free(tcp_socket->write_queue_head);
+		tcp_socket->write_queue_head = buffer_queue_entry_next;
 	}
 
-	// Still have unacknowledged packets
-	if(list_empty(&tcp_socket->write_queue.list)) {
+	// No more unacknowledged packets?
+	if(tcp_socket->write_queue_head == NULL) {
 		tcp_socket->rto_expires = 0;
 	}
 }
