@@ -25,17 +25,20 @@ void arp_free_cache() {
 	list_for_each_safe(list_item, tmp, &arp_entry_list) {
 		entry = list_entry(list_item, struct arp_entry, list);
 
-		// Clean up waiting list too
-		while(!list_empty(&entry->waiting_list)) {
-			struct sk_buff *buffer = list_first_entry(&entry->waiting_list, struct sk_buff, list);
+		// Clean up ARP buffer too
+		struct arp_buffer *buffer = entry->buffer_head;
+		while(buffer != NULL) {
+			skb_free(buffer->buffer);
 
-			list_del(entry->waiting_list.next);
-			skb_free(buffer);
+			struct arp_buffer *buffer_next = buffer->next;
+			free(buffer);
+			buffer = buffer_next;
 		}
 
 		list_del(list_item);
 		free(entry);
 	}
+
 
 	pthread_mutex_unlock(&arp_mutex);
 }
@@ -63,6 +66,7 @@ struct arp_entry *arp_add_entry_active(uint8_t *mac_address, uint32_t ipv4_addre
 	pthread_mutex_lock(&arp_mutex);
 
 	struct arp_entry *entry = malloc(sizeof(struct arp_entry));
+	entry->buffer_head = NULL;
 	entry->state = ARP_ENTRY_STATE_ACTIVE;
 	entry->protocol_type = ETH_P_IP;
 	entry->address = ipv4_address;
@@ -104,10 +108,10 @@ struct arp_entry *arp_send_request(struct net_dev* dev, uint32_t ipv4_address) {
 	pthread_mutex_lock(&arp_mutex);
 
 	struct arp_entry *entry = malloc(sizeof(struct arp_entry));
+	entry->buffer_head = NULL;
 	entry->state = ARP_ENTRY_STATE_WAITING;
 	entry->protocol_type = ETH_P_IP;
 	entry->address = ipv4_address;
-	entry->waiting_list.next = entry->waiting_list.prev = &entry->waiting_list;
 	memset(entry->mac, 0, ARP_HWSIZE_ETHERNET);
 	list_add(&entry->list, &arp_entry_list);
 
@@ -183,11 +187,13 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 			entry->state = ARP_ENTRY_STATE_ACTIVE;
 			pthread_mutex_unlock(&arp_mutex);
 
-//			struct list_head *list_item;
-//			list_for_each(list_item, &entry->waiting_list) {
-//				struct sk_buff *buffer = list_entry(list_item, struct sk_buff, list);
-//				eth_write(entry->mac, entry->protocol_type, buffer);
-//			}
+			while(entry->buffer_head != NULL) {
+				eth_write(entry->mac, entry->protocol_type, entry->buffer_head->buffer);
+
+				struct arp_buffer *buffer_next = entry->buffer_head->next;
+				free(entry->buffer_head);
+				entry->buffer_head = buffer_next;
+			}
 		}
 
 		if(arp_packet->dest_address != dev->ipv4) {
@@ -203,5 +209,22 @@ int arp_process_packet(struct net_dev *dev, struct eth_frame *eth_frame) {
 	else {
 		fprintf(stderr, "only IPv4 addresses are supported for ARP yet. requested: %x", arp_packet->protocol_type);
 		return -1;
+	}
+}
+
+
+void arp_add_to_buffer(struct arp_entry *arp_entry, struct sk_buff *sk_buff) {
+	struct arp_buffer* arp_buffer = malloc(sizeof(struct arp_buffer));
+	arp_buffer->next = NULL;
+	arp_buffer->buffer = sk_buff;
+
+	if(arp_entry->buffer_head == NULL)
+		arp_entry->buffer_head = arp_buffer;
+	else {
+		struct arp_buffer *tail = arp_entry->buffer_head;
+		while(tail->next != NULL)
+			tail = tail->next;
+
+		tail->next = arp_buffer;
 	}
 }

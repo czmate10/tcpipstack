@@ -34,11 +34,11 @@ int ipv4_send_packet(struct sock *sock, struct sk_buff *buffer) {
 	struct arp_entry *arp_entry = arp_get_entry(ETH_P_IP, sock->dest_ip);
 	if(arp_entry == NULL) {
 		arp_entry = arp_send_request(sock->dev, sock->dest_ip);
-//		list_add_tail(&buffer->list, &arp_entry->waiting_list);
+		arp_add_to_buffer(arp_entry, buffer);
 		return -1;
 	}
 	else if(arp_entry->state == ARP_ENTRY_STATE_WAITING) {
-//		list_add_tail(&buffer->list, &arp_entry->waiting_list);
+		arp_add_to_buffer(arp_entry, buffer);
 		return -1;
 	}
 	else

@@ -131,7 +131,7 @@ void finish() {
 
 struct tcp_socket *test_connect() {
 	uint32_t dest_ip;
-	inet_pton(AF_INET, "10.0.0.5", &dest_ip);
+	inet_pton(AF_INET, "192.168.100.5", &dest_ip);
 
 	srand48(time(NULL));
 	uint16_t port = (uint16_t)lrand48();
