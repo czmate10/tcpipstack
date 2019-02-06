@@ -106,14 +106,14 @@ struct tcp_socket {
 
 	uint32_t snd_una;  // oldest unacknowledged sequence number
 	uint32_t snd_nxt;  // next sequence number to be sent
-	uint16_t snd_wnd;  // send window
+	uint32_t snd_wnd;  // send window
 	uint32_t snd_up;  // send urgent pointer
 	uint32_t snd_wl1;  // segment sequence number used for last window update
 	uint32_t snd_wl2;  // segment acknowledgment number used for last window update
 	uint32_t iss;  // initial sent sequence number
 
 	uint32_t rcv_nxt;  // next sequence number expected on an incoming segments, and is the left or lower edge of the receive window
-	uint16_t rcv_wnd;  // receive window
+	uint32_t rcv_wnd;  // receive window
 	uint32_t rcv_up;  // receive urgent pointer
 	uint32_t irs;  // initial received sequence number
 };
@@ -140,7 +140,7 @@ void tcp_in(struct eth_frame *frame);
 struct sk_buff *tcp_out_create_buffer(uint16_t payload_size);
 
 void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
-void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);
+uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);
 void tcp_out_ack(struct tcp_socket *tcp_socket);
 void tcp_out_syn(struct tcp_socket *tcp_socket);
 void tcp_out_fin(struct tcp_socket *tcp_socket);
@@ -159,5 +159,5 @@ void tcp_calc_rto(struct tcp_socket *tcp_socket);
 
 void tcp_socket_free(struct tcp_socket *tcp_socket);
 void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
-struct tcp_socket* tcp_socket_new(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
+struct tcp_socket* tcp_socket_new(struct net_dev *device, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
 struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);

@@ -40,7 +40,7 @@ void tcp_out_header(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 	tcp_segment->ack_seq = htonl(tcp_segment->ack_seq);
 	tcp_segment->source_port = htons(tcp_socket->sock.source_port);
 	tcp_segment->dest_port = htons(tcp_socket->sock.dest_port);
-	tcp_segment->window_size = htons(tcp_socket->rcv_wnd);
+	tcp_segment->window_size = htons((uint16_t)tcp_socket->rcv_wnd);
 
 	tcp_segment->checksum = 0;
 	tcp_segment->checksum = tcp_checksum(tcp_segment, (uint16_t)(buffer->size - ETHERNET_HEADER_SIZE - IP_HEADER_SIZE),
@@ -57,7 +57,7 @@ void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 }
 
 
-void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len) {
+uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len) {
 	struct sk_buff *buffer = tcp_out_create_buffer((uint16_t) data_len);
 	struct tcp_segment *tcp_segment = tcp_segment_from_skb(buffer);
 
@@ -71,6 +71,8 @@ void tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_le
 
 	tcp_write_queue_push(tcp_socket, buffer);
 	tcp_write_queue_send(tcp_socket, 1);
+
+	return data_len;
 }
 
 

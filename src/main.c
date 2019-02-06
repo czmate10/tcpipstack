@@ -137,8 +137,7 @@ struct tcp_socket *test_connect() {
 	uint16_t port = (uint16_t)lrand48();
 
 	pthread_mutex_lock(&threads_mutex);
-	struct tcp_socket *tcp_socket = tcp_socket_new(device->ipv4, dest_ip, port, 80);
-	tcp_socket->sock.dev = device;
+	struct tcp_socket *tcp_socket = tcp_socket_new(device, dest_ip, port, 80);
 	tcp_out_syn(tcp_socket);
 	pthread_mutex_unlock(&threads_mutex);
 
@@ -161,8 +160,12 @@ struct tcp_socket *test_connect() {
 	return NULL;
 }
 
-int test_send(struct tcp_socket *tcp_socket, uint8_t *data, size_t data_len) {
-	tcp_out_data(tcp_socket, data, (uint16_t)data_len);
+int test_send(struct tcp_socket *tcp_socket) {
+	char test_data[2000] = {'A'};
+	char *test_data_header = "GET / HTTP/1.1\r\n\r\n";
+	strcpy(test_data, test_data_header);
+
+	tcp_out_data(tcp_socket, (uint8_t *) test_data, 2000);
 	return 0;
 }
 
@@ -174,8 +177,7 @@ int main() {
 
 	if(tcp_socket) {
 		printf("Connected!\n");
-		char *test_data = "GET / HTTP/1.1\r\n\r\n";
-		test_send(tcp_socket, (uint8_t *) test_data, strlen(test_data));
+		test_send(tcp_socket);
 
 		while(1) {
 			if(tcp_socket->state == TCPS_CLOSED)  // TODO: Socket is more than likely already free'd here

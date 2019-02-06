@@ -56,6 +56,7 @@ struct net_dev *init_tap_device(char *dev) {
 		exit(1);
 	}
 
+	device->mtu = TAP_DEVICE_MTU;
 	device->sock_fd = sock_fd;
 
 	// HW address

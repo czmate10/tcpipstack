@@ -4,7 +4,7 @@
 #include "skbuff.h"
 #include "tap.h"
 
-#define ETHERNET_MAX_PAYLOAD_SIZE 1500
+#define ETHERNET_MAX_PAYLOAD_SIZE 1520
 #define ETHERNET_HEADER_SIZE 14
 
 

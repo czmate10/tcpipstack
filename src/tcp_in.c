@@ -10,10 +10,8 @@
 
 uint8_t tcp_in_options(struct tcp_segment *tcp_segment, struct tcp_options *opts) {
 	uint8_t options_size = (uint8_t) ((tcp_segment->data_offset - 5) << 2);
-	if (options_size == 0) {
-		opts->mss = TCP_DEFAULT_MSS; // Default
+	if (options_size == 0)
 		return options_size;
-	}
 
 	uint8_t* ptr = tcp_segment->data;
 	while(ptr < tcp_segment->data + options_size) {
@@ -195,6 +193,9 @@ void tcp_in(struct eth_frame *frame) {
 	// Get options
 	struct tcp_options opts = {0};
 	uint8_t options_size = tcp_in_options(tcp_segment, &opts);
+
+	if(opts.mss == 0)  // MSS wasn't supplied
+		opts.mss = tcp_socket->mss;
 
 
 	// First check if we are in one of these 3 states
