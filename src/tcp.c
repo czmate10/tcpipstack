@@ -35,8 +35,8 @@ void *tcp_timer_fast(void *args) {
 		list_for_each(list_item, &tcp_socket_list) {
 			tcp_socket = list_entry(list_item, struct tcp_socket, list);
 
-			if(tcp_socket == NULL)
-				break;
+			if(tcp_socket == NULL || tcp_socket->state != TCPS_ESTABLISHED)
+				continue;
 
 			if(tcp_socket->delayed_ack)
 				tcp_out_ack(tcp_socket);
@@ -63,8 +63,8 @@ void *tcp_timer_slow(void *args) {
 		list_for_each(list_item, &tcp_socket_list) {
 			tcp_socket = list_entry(list_item, struct tcp_socket, list);
 
-			if(tcp_socket == NULL)
-				break;
+			if(tcp_socket == NULL || tcp_socket->state != TCPS_ESTABLISHED)
+				continue;
 
 			// Check if RTO expired
 			if(tcp_socket->rto_expires && tcp_socket->rto_expires < timer_ticks) {
@@ -72,7 +72,7 @@ void *tcp_timer_slow(void *args) {
 				tcp_socket->rto_expires = timer_ticks + tcp_socket->rto;
 
 				printf("Resending segment, RTO=%u\n", tcp_socket->rto);
-				tcp_write_queue_send(tcp_socket, 1);
+				tcp_write_queue_send(tcp_socket);
 			}
 		}
 
@@ -153,6 +153,7 @@ struct tcp_socket* tcp_socket_new(struct net_dev *device, uint32_t dest_ip, uint
 	tcp_socket->snd_nxt = tcp_socket->iss;
 	tcp_socket->snd_una = tcp_socket->iss;
 	tcp_socket->rcv_wnd = TCP_INITIAL_WINDOW;
+	tcp_socket->snd_wnd = TCP_INITIAL_WINDOW;
 
 	tcp_socket->sock.dev = device;
 	tcp_socket->sock.protocol = IPPROTO_TCP;
@@ -203,16 +204,19 @@ void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff
 	sk_buff->manual_free = 1;  // don't free() when calling eth_write()
 }
 
-void tcp_write_queue_send(struct tcp_socket *tcp_socket, uint32_t amount) {
-	struct tcp_buffer_queue_entry *buffer_queue_entry = tcp_socket->write_queue_head;
+void tcp_write_queue_send(struct tcp_socket *tcp_socket) {
+	struct tcp_buffer_queue_entry *entry = tcp_socket->write_queue_head;
 
-	while(buffer_queue_entry != NULL && amount != 0) {
-		tcp_out_send(tcp_socket, buffer_queue_entry->sk_buff);
-		tcp_socket->snd_nxt += buffer_queue_entry->sk_buff->payload_size;
+	while(entry != NULL && entry->sk_buff->payload_size < tcp_socket->snd_wnd) {
+		tcp_out_set_seqnums(tcp_socket, entry->sk_buff);
+		tcp_out_header(tcp_socket, entry->sk_buff);
+
+		tcp_out_send(tcp_socket, entry->sk_buff);
+		tcp_socket->snd_nxt += entry->sk_buff->payload_size;
+		tcp_socket->snd_wnd -= entry->sk_buff->payload_size;
 		tcp_socket->delayed_ack = 0;  // piggyback off
 
-		amount--;
-		buffer_queue_entry = buffer_queue_entry->next;
+		entry = entry->next;
 	}
 }
 

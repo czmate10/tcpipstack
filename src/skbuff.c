@@ -9,6 +9,7 @@ struct sk_buff* skb_alloc(uint32_t size) {
 		perror("could not allocate memory for socket buffer");
 		exit(1);
 	}
+	memset(buff, 0, sizeof(struct sk_buff));
 
 	buff->size = size;
 	buff->data = malloc(size);

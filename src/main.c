@@ -159,10 +159,12 @@ struct tcp_socket *test_connect(char *dest_ip_str, uint16_t dest_port) {
 
 int test_send(struct tcp_socket *tcp_socket) {
 	char test_data[2000] = {'A'};
-	char *test_data_header = "GET / HTTP/1.1\r\n\r\n";
+	char *test_data_header = "POST / HTTP/1.1\r\n\r\n";
 	strcpy(test_data, test_data_header);
 
+	pthread_mutex_lock(&threads_mutex);
 	tcp_out_data(tcp_socket, (uint8_t *) test_data, 2000);
+	pthread_mutex_unlock(&threads_mutex);
 	return 0;
 }
 

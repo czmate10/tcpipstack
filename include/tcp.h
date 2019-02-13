@@ -101,9 +101,6 @@ struct tcp_socket {
 	uint32_t cwnd;  // sender-side limit on the amount of data the sender can transmit before receiving an ACK
 	uint32_t rwnd;  // receiver-side limit on the amount of outstanding data
 
-
-	uint16_t timers[TCP_T_COUNT];
-
 	uint32_t snd_una;  // oldest unacknowledged sequence number
 	uint32_t snd_nxt;  // next sequence number to be sent
 	uint32_t snd_wnd;  // send window
@@ -140,7 +137,9 @@ void tcp_in(struct eth_frame *frame);
 struct sk_buff *tcp_out_create_buffer(uint16_t payload_size);
 
 void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
-uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint16_t data_len);
+uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint32_t data_len);
+void tcp_out_set_seqnums(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
+void tcp_out_header(struct tcp_socket *tcp_socket, struct sk_buff *buffer);
 void tcp_out_ack(struct tcp_socket *tcp_socket);
 void tcp_out_syn(struct tcp_socket *tcp_socket);
 void tcp_out_fin(struct tcp_socket *tcp_socket);
@@ -149,7 +148,7 @@ void tcp_out_rst(struct tcp_socket *tcp_socket);
 void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
 void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff);
-void tcp_write_queue_send(struct tcp_socket *tcp_socket, uint32_t amount);
+void tcp_write_queue_send(struct tcp_socket *tcp_socket);
 void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
 
 uint32_t tcp_timer_get_ticks();
@@ -161,3 +160,11 @@ void tcp_socket_free(struct tcp_socket *tcp_socket);
 void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
 struct tcp_socket* tcp_socket_new(struct net_dev *device, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
 struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
+
+
+
+static void debug_tcp(char *prefix, struct tcp_segment *tcp_segment, struct tcp_socket *tcp_socket) {
+	printf("%s :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | ACK SEQ %u | WS %d | MSS %d | SRTT %d\n",
+		   prefix, tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
+		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->ack_seq, tcp_segment->window_size, tcp_socket->mss, tcp_socket->srtt);
+}

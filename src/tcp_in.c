@@ -69,7 +69,10 @@ void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segm
 	// 1: check ACK
 	if(tcp_segment->ack) {
 		if (tcp_segment->ack_seq <= tcp_socket->iss || tcp_segment->ack_seq > tcp_socket->snd_nxt) {
-			return; // TODO: check RST flag
+			if(!tcp_segment->rst)
+				tcp_out_rst(tcp_socket);
+
+			return;
 		}
 
 		if (tcp_segment->ack_seq < tcp_socket->snd_una || tcp_segment->ack_seq > tcp_socket->snd_nxt) {
@@ -186,9 +189,7 @@ void tcp_in(struct eth_frame *frame) {
 	}
 
 	// Debug print
-	printf("TCP IN :: %d->%d | FIN %d | SYN %d | RST %d | PSH %d | ACK %d | URG %d | ECE %d | CWR %d | SEQ %u | ACK SEQ %u | WS %d | MSS %d | SRTT %d\n",
-		   tcp_segment->source_port, tcp_segment->dest_port, tcp_segment->fin, tcp_segment->syn, tcp_segment->rst, tcp_segment->psh,
-		   tcp_segment->ack, tcp_segment->urg, tcp_segment->ece, tcp_segment->cwr, tcp_segment->seq, tcp_segment->ack_seq, tcp_segment->window_size, tcp_socket->mss, tcp_socket->srtt);
+	debug_tcp("TCP IN", tcp_segment, tcp_socket);
 
 	// Get options
 	struct tcp_options opts = {0};
@@ -240,7 +241,6 @@ void tcp_in(struct eth_frame *frame) {
 			case TCPS_FIN_WAIT1:
 			case TCPS_FIN_WAIT2:
 			case TCPS_CLOSE_WAIT:
-				// TODO: flush segment queues
 				fprintf(stderr, "connection reset\n");
 				tcp_socket->state = TCPS_CLOSED;
 				tcp_socket_free(tcp_socket);
@@ -273,7 +273,6 @@ void tcp_in(struct eth_frame *frame) {
 			case TCPS_CLOSING:
 			case TCPS_LAST_ACK:
 			case TCPS_TIME_WAIT:
-				// TODO: flush segment queues
 				fprintf(stderr, "connection reset\n");
 				tcp_out_rst(tcp_socket);
 				tcp_socket->state = TCPS_CLOSED;
@@ -354,8 +353,8 @@ check_urg:
 				tcp_socket->rcv_nxt = tcp_segment->seq + payload_size + (tcp_segment->fin & 0x01);  // add 1 to ack if the segment is also FIN
 
 				// Debug print
-				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",
-					   payload_size, payload_size, payload);
+//				printf("\nReceived (%d bytes):\n--------------------\n%.*s\n--------------------\n",
+//					   payload_size, payload_size, payload);
 
 				if(tcp_socket->delayed_ack)  // RFC1122 states there should be ACK for at least every 2nd incoming segment
 					tcp_out_ack(tcp_socket);
