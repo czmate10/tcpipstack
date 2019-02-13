@@ -112,12 +112,7 @@ void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket) {
 	tcp_socket_free(tcp_socket);
 }
 
-void tcp_socket_free(struct tcp_socket *tcp_socket) {
-	if(tcp_socket == NULL)
-		return;
-
-	tcp_socket->state = TCPS_CLOSED;
-
+void tcp_socket_free_queues(struct tcp_socket *tcp_socket) {
 	struct tcp_buffer_queue_entry *entry = tcp_socket->write_queue_head;
 	while(entry != NULL) {
 		struct tcp_buffer_queue_entry *tmp = entry->next;
@@ -133,6 +128,13 @@ void tcp_socket_free(struct tcp_socket *tcp_socket) {
 		free(entry);
 		entry = tmp;
 	}
+}
+
+void tcp_socket_free(struct tcp_socket *tcp_socket) {
+	if(tcp_socket == NULL)
+		return;
+
+	tcp_socket->state = TCPS_CLOSED;
 
 	list_del(&tcp_socket->list);
 	free(tcp_socket);

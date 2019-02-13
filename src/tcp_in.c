@@ -390,6 +390,9 @@ check_urg:
 			case TCPS_ESTABLISHED:
 				printf("TCP :: closing connection...\n");
 
+				// Flush segment queues
+				tcp_socket_free_queues(tcp_socket);
+
 				if(!tcp_segment->psh) {
 					// We already sent ACK for PSH
 					tcp_socket->rcv_nxt = tcp_segment->seq + 1;
