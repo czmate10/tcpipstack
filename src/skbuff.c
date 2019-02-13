@@ -12,6 +12,7 @@ struct sk_buff* skb_alloc(uint32_t size) {
 
 	buff->size = size;
 	buff->data = malloc(size);
+	buff->manual_free = 0;
 
 	memset(buff->data, 0, size);
 

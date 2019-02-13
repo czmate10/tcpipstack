@@ -79,7 +79,7 @@ void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segm
 
 	// 2: check RST bit
 	if (tcp_segment->rst) {
-		fprintf(stderr, "error: connection reset");
+		fprintf(stderr, "error: connection reset\n");
 		tcp_socket_free(tcp_socket);
 		return;
 	}

@@ -12,9 +12,13 @@ ip route add dev tap0 10.0.0.0/24
 ip address add dev tap0 local 10.0.0.10
 ```
 
+# Simple HTTP client
+After compiling the project, you can run it with:
+`tcpipstack -h 10.0.0.10 -p 80`  
+This will connect to an HTTP server running on 10.0.0.10:80
+
 # To-do
 - Clean up code, add documentation for functions and unit tests
-- Use ARP requests to look up physical address of IP destination
 - Add IPv6 support
 - TCP write fragmentation
 - TCP congestion control

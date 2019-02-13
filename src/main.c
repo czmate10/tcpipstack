@@ -129,15 +129,15 @@ void finish() {
 #define TEST_SOCKET_POLL_INTERVAL 20  // check if we are connected every 20 ms
 #define TEST_SOCKET_TIMEOUT 5000  // timeout in 5 seconds if we are still not connected
 
-struct tcp_socket *test_connect() {
+struct tcp_socket *test_connect(char *dest_ip_str, uint16_t dest_port) {
 	uint32_t dest_ip;
-	inet_pton(AF_INET, "192.168.100.5", &dest_ip);
+	inet_pton(AF_INET, dest_ip_str, &dest_ip);
 
 	srand48(time(NULL));
 	uint16_t port = (uint16_t)lrand48();
 
 	pthread_mutex_lock(&threads_mutex);
-	struct tcp_socket *tcp_socket = tcp_socket_new(device, dest_ip, port, 80);
+	struct tcp_socket *tcp_socket = tcp_socket_new(device, dest_ip, port, dest_port);
 	tcp_out_syn(tcp_socket);
 	pthread_mutex_unlock(&threads_mutex);
 
@@ -154,9 +154,6 @@ struct tcp_socket *test_connect() {
 		usleep(TEST_SOCKET_POLL_INTERVAL * 1000);
 	}
 
-	pthread_mutex_lock(&threads_mutex);
-	tcp_socket_free(tcp_socket);
-	pthread_mutex_unlock(&threads_mutex);
 	return NULL;
 }
 
@@ -169,11 +166,45 @@ int test_send(struct tcp_socket *tcp_socket) {
 	return 0;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+	char *dest_ip = NULL;
+	int dest_port = -1;
+
+	int opt;
+	while((opt = getopt(argc, argv, ":h:p:")) != -1) {
+		switch(opt) {
+			case 'h':
+				dest_ip = malloc((strlen(optarg)+1) * sizeof(char));
+				if(dest_ip == NULL) {
+				    printf("failed to allocate memory when parsing params");
+				    exit(1);
+				}
+				strcpy(dest_ip, optarg);
+				break;
+			case 'p':
+				dest_port = atoi(optarg);
+				break;
+			default:
+				break;
+		}
+	}
+
+	if(dest_ip == NULL) {
+		printf("Destination IP is missing, please use -h\n");
+		exit(1);
+	}
+	if(dest_port == -1) {
+		printf("Destination port is missing, please use -p\n");
+		exit(1);
+	}
+
+	printf("Connecting to %s:%d...\n", dest_ip, dest_port);
+
 	setup();
 
 	// test tcp_socket
-	struct tcp_socket * tcp_socket = test_connect();
+	struct tcp_socket * tcp_socket = test_connect(dest_ip, (uint16_t)dest_port);
+	free(dest_ip);
 
 	if(tcp_socket) {
 		printf("Connected!\n");

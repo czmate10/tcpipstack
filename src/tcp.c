@@ -116,6 +116,24 @@ void tcp_socket_free(struct tcp_socket *tcp_socket) {
 	if(tcp_socket == NULL)
 		return;
 
+	tcp_socket->state = TCPS_CLOSED;
+
+	struct tcp_buffer_queue_entry *entry = tcp_socket->write_queue_head;
+	while(entry != NULL) {
+		struct tcp_buffer_queue_entry *tmp = entry->next;
+		skb_free(entry->sk_buff);
+		free(entry);
+		entry = tmp;
+	}
+
+	entry = tcp_socket->read_queue_head;
+	while(entry != NULL) {
+		struct tcp_buffer_queue_entry *tmp = entry->next;
+		skb_free(entry->sk_buff);
+		free(entry);
+		entry = tmp;
+	}
+
 	list_del(&tcp_socket->list);
 	free(tcp_socket);
 }
