@@ -13,8 +13,6 @@
 
 
 #define TCP_HEADER_SIZE 20
-#define TCP_OPTS_MAXLEN 32
-#define TCP_DEFAULT_MSS 1460
 #define TCP_INITIAL_WINDOW 64240  // initial window size
 
 
@@ -31,7 +29,6 @@
 // Timers
 #define TCP_T_SLOW_INTERVAL 500  // slow timer should run every 500ms
 #define TCP_T_FAST_INTERVAL 100  // fast timer should run every 100ms, TODO: delayed ack timer
-#define TCP_T_COUNT 4  // four timers
 
 
 // RTO
@@ -85,8 +82,8 @@ struct tcp_buffer_queue_entry {
 struct tcp_socket {
 	struct list_head list;
 	struct sock sock;
-	struct tcp_buffer_queue_entry *write_queue_head;
-	struct tcp_buffer_queue_entry *read_queue_head;
+	struct tcp_buffer_queue_entry *out_queue_head;
+	struct tcp_buffer_queue_entry *in_queue_head;
 
 	// TCP Control Block
 	enum tcp_state state;
@@ -115,7 +112,7 @@ struct tcp_socket {
 	uint32_t irs;  // initial received sequence number
 };
 
-struct tcp_socket *tcp_sockets_head;
+struct list_head tcp_socket_list;
 
 
 static inline struct tcp_segment *tcp_segment_from_skb(struct sk_buff *buff) {
@@ -147,9 +144,9 @@ void tcp_out_synack(struct tcp_socket *tcp_socket);
 void tcp_out_rst(struct tcp_socket *tcp_socket);
 void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
-void tcp_write_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff);
-void tcp_write_queue_send(struct tcp_socket *tcp_socket);
-void tcp_write_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
+void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff);
+void tcp_out_queue_pop(struct tcp_socket *tcp_socket);
+void tcp_out_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
 
 uint32_t tcp_timer_get_ticks();
 void *tcp_timer_fast(void *args);

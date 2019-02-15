@@ -70,7 +70,7 @@ struct net_dev *init_tap_device(char *dev) {
 }
 
 void free_tap_device() {
-	close((int)device->sock_fd);
+	close(device->sock_fd);
 	free(device);
 }
 

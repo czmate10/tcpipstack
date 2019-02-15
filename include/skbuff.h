@@ -11,8 +11,6 @@ struct sk_buff {
 	uint32_t size;
 
 	uint32_t payload_size;
-	uint32_t seq;
-	uint32_t seq_end;
 
 	uint8_t *data;
 };

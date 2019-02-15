@@ -22,9 +22,6 @@ void tcp_out_set_seqnums(struct tcp_socket *tcp_socket, struct sk_buff *buffer) 
 
 	tcp_segment->seq = tcp_socket->snd_nxt;
 	tcp_segment->ack_seq = tcp_socket->rcv_nxt;
-
-	buffer->seq = tcp_socket->snd_nxt;
-	buffer->seq_end = tcp_socket->snd_nxt + buffer->payload_size;
 }
 
 
@@ -74,13 +71,66 @@ uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint32_t dat
 
         memcpy(tcp_segment->data, data + (i * tcp_socket->mss), (size_t)packet_len);
 
-        tcp_write_queue_push(tcp_socket, buffer);
+		tcp_out_queue_push(tcp_socket, buffer);
     }
 
-    tcp_write_queue_send(tcp_socket);
+	tcp_out_queue_pop(tcp_socket);
 	return data_len;
 }
 
+void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff) {
+	struct tcp_buffer_queue_entry *buffer_queue_entry = malloc(sizeof(struct tcp_buffer_queue_entry));
+	buffer_queue_entry->next = NULL;
+	buffer_queue_entry->sk_buff = sk_buff;
+
+	if(tcp_socket->out_queue_head == NULL)
+		tcp_socket->out_queue_head = buffer_queue_entry;
+	else {
+		struct tcp_buffer_queue_entry *tail = tcp_socket->out_queue_head;
+		while(tail->next != NULL)
+			tail = tail->next;
+
+		tail->next = buffer_queue_entry;
+	}
+
+	sk_buff->manual_free = 1;  // don't free() when calling eth_write()
+}
+
+void tcp_out_queue_pop(struct tcp_socket *tcp_socket) {
+	struct tcp_buffer_queue_entry *entry = tcp_socket->out_queue_head;
+
+	while(entry != NULL && entry->sk_buff->payload_size < tcp_socket->snd_wnd) {
+		tcp_out_set_seqnums(tcp_socket, entry->sk_buff);
+		tcp_out_header(tcp_socket, entry->sk_buff);
+
+		tcp_out_send(tcp_socket, entry->sk_buff);
+		tcp_socket->snd_nxt += entry->sk_buff->payload_size;
+		tcp_socket->snd_wnd -= entry->sk_buff->payload_size;
+		tcp_socket->delayed_ack = 0;  // piggyback off
+
+		entry = entry->next;
+	}
+}
+
+void tcp_out_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num) {
+	while(tcp_socket->out_queue_head != NULL) {
+		if(tcp_socket->snd_nxt + tcp_socket->out_queue_head->sk_buff->payload_size > seq_num)
+			break;
+
+		tcp_calc_rto(tcp_socket);
+
+		skb_free(tcp_socket->out_queue_head->sk_buff);
+
+		struct tcp_buffer_queue_entry *buffer_queue_entry_next = tcp_socket->out_queue_head->next;
+		free(tcp_socket->out_queue_head);
+		tcp_socket->out_queue_head = buffer_queue_entry_next;
+	}
+
+	// No more unacknowledged packets?
+	if(tcp_socket->out_queue_head == NULL) {
+		tcp_socket->rto_expires = 0;
+	}
+}
 
 void tcp_out_ack(struct tcp_socket *tcp_socket) {
 	struct sk_buff *buffer = tcp_out_create_buffer(0);
@@ -114,8 +164,8 @@ void tcp_out_syn(struct tcp_socket *tcp_socket) {
 	memcpy(&tcp_segment->data[2], &mss, 2);
 
 	// Send it
-	tcp_write_queue_push(tcp_socket, buffer);
-	tcp_write_queue_send(tcp_socket);
+	tcp_out_queue_push(tcp_socket, buffer);
+	tcp_out_queue_pop(tcp_socket);
 
 	// Increase SND.NXT by 1
 	tcp_socket->snd_nxt++;

@@ -14,6 +14,7 @@ add_executable(tcpipstack
         src/ipv4.c
         src/icmp.c
         src/tcp.c
+        src/tcp_socket.c
         src/tcp_out.c
         src/tcp_in.c)
 

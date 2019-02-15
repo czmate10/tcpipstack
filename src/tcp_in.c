@@ -108,7 +108,7 @@ void tcp_in_syn_sent(struct tcp_socket *tcp_socket, struct tcp_segment *tcp_segm
 		if(tcp_segment->ack) {
 			tcp_socket->snd_una = tcp_segment->ack_seq;
 			// remove SYN segment from retransmission queue
-			tcp_write_queue_clear(tcp_socket, tcp_socket->snd_una);
+			tcp_out_queue_clear(tcp_socket, tcp_socket->snd_una);
 		}
 
 		if(tcp_socket->snd_una > tcp_socket->iss) {
@@ -278,6 +278,8 @@ void tcp_in(struct eth_frame *frame) {
 				tcp_socket->state = TCPS_CLOSED;
 				tcp_socket_free(tcp_socket);
 				return;
+			default:
+				break;
 		}
 	}
 
@@ -317,7 +319,7 @@ void tcp_in(struct eth_frame *frame) {
 		case TCPS_ESTABLISHED:
 			if(tcp_socket->snd_una < tcp_segment->ack_seq <= tcp_socket->snd_nxt) {
 				tcp_socket->snd_una = tcp_segment->ack_seq;
-				tcp_write_queue_clear(tcp_socket, tcp_socket->snd_una);  // Clear write queue
+				tcp_out_queue_clear(tcp_socket, tcp_socket->snd_una);  // Clear write queue
 				tcp_socket->rto_expires = tcp_timer_get_ticks() + tcp_socket->rto;  // Restart RTO timer
 
 				// Set send window, but not if it's an old segment (snd_wl1, snd_wl2)
@@ -332,6 +334,8 @@ void tcp_in(struct eth_frame *frame) {
 				tcp_out_ack(tcp_socket);
 				return;
 			}
+		default:
+			break;
 	}
 
 	// 6: check URG bit
@@ -373,8 +377,7 @@ check_urg:
 			break;
 
 		default:
-			fprintf(stderr, "unknown state for tcp_socket: %d\n", tcp_socket->state);
-			return;
+			break;
 	}
 
 	// 8: check FIN bit
@@ -422,6 +425,9 @@ check_urg:
 
 			case TCPS_TIME_WAIT:
 				// TODO: restart 2MSL time-wait
+				break;
+
+			default:
 				break;
 		}
 	}

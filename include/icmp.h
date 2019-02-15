@@ -12,11 +12,6 @@ struct icmp_v4_packet {
 	uint8_t data[];
 } __attribute__((packed));
 
-struct icmp_v4_echo_request {
-	uint16_t id;
-	uint16_t seq;
-	uint8_t data[];
-};
 
 int icmp_process_packet(struct net_dev *dev, struct eth_frame *frame);
 

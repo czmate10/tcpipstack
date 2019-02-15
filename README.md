@@ -23,6 +23,7 @@ This will connect to an HTTP server running on 10.0.0.10:80
 - TCP write fragmentation
 - TCP congestion control
 - TCP selective ARQ
+- Socket API for users
 
 # Thanks to
 - [level-ip by saminiir](https://github.com/saminiir/level-ip)
