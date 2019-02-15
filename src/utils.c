@@ -33,3 +33,13 @@ uint16_t checksum(register uint16_t *ptr, register uint32_t len, register uint32
 	sum += (sum >> 16);			/* add carry */
 	return (uint16_t)~sum;;
 }
+
+uint16_t tcp_checksum(void *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip) {
+	// We need to include the pseudo-header in the checksum.
+	uint32_t sum = htons(IPPROTO_TCP)
+				   + htons(tcp_segment_len)
+				   + source_ip
+				   + dest_ip;
+
+	return checksum((uint16_t *)tcp_segment, (uint32_t) (tcp_segment_len), sum);
+}

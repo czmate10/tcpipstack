@@ -99,7 +99,7 @@ void setup() {
 	// TAP device
 	char dev_name[IFNAMSIZ];
 	strcpy(dev_name, "tap0");
-	device = init_tap_device(dev_name);
+	device = tap_init_dev(dev_name);
 	if(device == NULL) {
 		printf("Failed to create TAP device, exiting...\n");
 		exit(1);

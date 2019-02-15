@@ -171,7 +171,8 @@ void tcp_in(struct eth_frame *frame) {
 	uint16_t tcp_data_size = (uint16_t)(tcp_segment_size - TCP_HEADER_SIZE);
 
 	// Compare checksums
-	if (checksum != tcp_checksum(tcp_segment, tcp_segment_size, ip_packet->source_ip, ip_packet->dest_ip)) {
+	tcp_segment->checksum = 0;
+	if (checksum != tcp_checksum((void *)tcp_segment, tcp_segment_size, ip_packet->source_ip, ip_packet->dest_ip)) {
 		fprintf(stderr, "TCP segment has mismatching checksum!\n");
 		return;
 	}

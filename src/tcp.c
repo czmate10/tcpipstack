@@ -7,17 +7,6 @@ extern int RUNNING;
 uint32_t timer_ticks;  // time elapsed since start in MS
 
 
-uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip) {
-	// We need to include the pseudo-header in the checksum.
-	uint32_t sum = htons(IPPROTO_TCP)
-				   + htons(tcp_segment_len)
-				   + source_ip
-				   + dest_ip;
-
-	tcp_segment->checksum = 0;
-	return checksum((uint16_t *)tcp_segment, (uint32_t) (tcp_segment_len), sum);
-}
-
 uint32_t tcp_timer_get_ticks() {
 	return timer_ticks;
 }
@@ -104,9 +93,4 @@ void tcp_calc_rto(struct tcp_socket *tcp_socket) {
 	tcp_socket->rto = max(tcp_socket->rto, TCP_RTO_MIN);
 
 	printf("Using RTO of %u\n", tcp_socket->rto);
-}
-
-void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket) {
-	// TODO: actually wait 2msl
-	tcp_socket_free(tcp_socket);
 }

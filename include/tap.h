@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 
-#define TAP_DEVICE_MAC "00:50:56:f1:c4:10"
 #define TAP_DEVICE_IP "192.168.100.6"
 #define TAP_DEVICE_MTU 1500
 
@@ -18,6 +17,6 @@ struct net_dev {
 struct net_dev *device;
 
 int tap_alloc(char *dev);
-struct net_dev *init_tap_device(char *dev);
+struct net_dev *tap_init_dev(char *dev);
 void free_tap_device();
 struct net_dev *get_tap_device();

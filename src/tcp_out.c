@@ -39,7 +39,7 @@ void tcp_out_header(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 	tcp_segment->window_size = htons((uint16_t)tcp_socket->rcv_wnd);
 
 	tcp_segment->checksum = 0;
-	tcp_segment->checksum = tcp_checksum(tcp_segment, (uint16_t)(buffer->size - ETHERNET_HEADER_SIZE - IP_HEADER_SIZE),
+	tcp_segment->checksum = tcp_checksum((void *)tcp_segment, (uint16_t)(buffer->size - ETHERNET_HEADER_SIZE - IP_HEADER_SIZE),
 										 tcp_socket->sock.source_ip, tcp_socket->sock.dest_ip);
 }
 

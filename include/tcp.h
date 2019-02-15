@@ -129,7 +129,6 @@ static inline void tcp_segment_ntoh(struct tcp_segment *tcp_segment) {
 	tcp_segment->urg_pointer = ntohs(tcp_segment->urg_pointer);
 }
 
-uint16_t tcp_checksum(struct tcp_segment *tcp_segment, uint16_t tcp_segment_len, uint32_t source_ip, uint32_t dest_ip);
 void tcp_in(struct eth_frame *frame);
 struct sk_buff *tcp_out_create_buffer(uint16_t payload_size);
 
@@ -155,7 +154,6 @@ void tcp_calc_rto(struct tcp_socket *tcp_socket);
 
 void tcp_socket_free(struct tcp_socket *tcp_socket);
 void tcp_socket_free_queues(struct tcp_socket *tcp_socket);
-void tcp_socket_wait_2msl(struct tcp_socket *tcp_socket);
 struct tcp_socket* tcp_socket_new(struct net_dev *device, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
 struct tcp_socket* tcp_socket_get(uint32_t source_ip, uint32_t dest_ip, uint16_t source_port, uint16_t dest_port);
 

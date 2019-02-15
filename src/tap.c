@@ -3,26 +3,25 @@
 #include <linux/if_tun.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <stdio.h>
 #include <malloc.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "tap.h"
 
 
-int tap_alloc(char *dev)
-{
-	struct ifreq ifr;
+int tap_alloc(char *dev) {
+	struct ifreq ifr = {0};
 	int fd, err;
 
 	if((fd = open("/dev/net/tun", O_RDWR)) == -1) {
 		perror("cannot open /dev/net/tun");
 		return -1;
 	}
-
-	memset(&ifr, 0, sizeof(ifr));
 
 	/* Flags: IFF_TUN   - TUN device (no Ethernet headers)
 	 *        IFF_TAP   - TAP device
@@ -43,8 +42,14 @@ int tap_alloc(char *dev)
 	return fd;
 }
 
+void tap_get_mac(int dev_fd, uint8_t *hwaddr) {
+	struct ifreq ifr = {};
+	ioctl(dev_fd, SIOCGIFHWADDR, &ifr);
+	memcpy(hwaddr, ifr.ifr_hwaddr.sa_data, IFHWADDRLEN);
+}
 
-struct net_dev *init_tap_device(char *dev) {
+
+struct net_dev *tap_init_dev(char *dev) {
 	int sock_fd = tap_alloc(dev);
 	if(sock_fd < 0)
 		return NULL;
@@ -56,12 +61,9 @@ struct net_dev *init_tap_device(char *dev) {
 		exit(1);
 	}
 
-	device->mtu = TAP_DEVICE_MTU;
 	device->sock_fd = sock_fd;
-
-	// HW address
-	for(int i = 0; i < 6; i++)
-		sscanf(&TAP_DEVICE_MAC[i*3], "%2hhx", &device->hwaddr[i]);
+	device->mtu = TAP_DEVICE_MTU;
+	tap_get_mac(sock_fd, device->hwaddr);
 
 	// IPv4 address
 	inet_pton(AF_INET, TAP_DEVICE_IP, &device->ipv4);
