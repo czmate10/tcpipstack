@@ -127,7 +127,8 @@ void finish() {
 
 
 #define TEST_SOCKET_POLL_INTERVAL 20  // check if we are connected every 20 ms
-#define TEST_SOCKET_TIMEOUT 5000  // timeout in 5 seconds if we are still not connected
+#define TEST_SOCKET_TIMEOUT 15000  // timeout in 5 seconds if we are still not connected
+#define TEST_DATA_LEN 2000
 
 struct tcp_socket *test_connect(char *dest_ip_str, uint16_t dest_port) {
 	uint32_t dest_ip;
@@ -158,12 +159,12 @@ struct tcp_socket *test_connect(char *dest_ip_str, uint16_t dest_port) {
 }
 
 int test_send(struct tcp_socket *tcp_socket) {
-	char test_data[1200] = {'A'};
+	char test_data[TEST_DATA_LEN] = {'A'};
 	char *test_data_header = "POST / HTTP/1.1\r\n\r\n";
 	strcpy(test_data, test_data_header);
 
 	pthread_mutex_lock(&threads_mutex);
-	tcp_out_data(tcp_socket, (uint8_t *) test_data, 1200);
+	tcp_out_data(tcp_socket, (uint8_t *) test_data, TEST_DATA_LEN);
 	pthread_mutex_unlock(&threads_mutex);
 	return 0;
 }

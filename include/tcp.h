@@ -144,7 +144,7 @@ void tcp_out_rst(struct tcp_socket *tcp_socket);
 void tcp_out_rstack(struct tcp_socket *tcp_socket);
 
 void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff);
-void tcp_out_queue_pop(struct tcp_socket *tcp_socket);
+void tcp_out_queue_send(struct tcp_socket *tcp_socket);
 void tcp_out_queue_clear(struct tcp_socket *tcp_socket, uint32_t seq_num);
 
 uint32_t tcp_timer_get_ticks();

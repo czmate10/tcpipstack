@@ -48,8 +48,9 @@ void tcp_out_send(struct tcp_socket *tcp_socket, struct sk_buff *buffer) {
 	// Set RTO
 	tcp_socket->rto_expires = tcp_timer_get_ticks() + tcp_socket->rto;
 
-	//if(!tcp_segment->psh || tcp_socket->rto > 1000) // for debugging
-	ipv4_send_packet(&tcp_socket->sock, buffer);
+	struct tcp_segment *segment = tcp_segment_from_skb(buffer);
+	if((!segment->psh && !segment->syn) || tcp_socket->rto > 1000) // for debugging, imitate packet loss
+		ipv4_send_packet(&tcp_socket->sock, buffer);
 }
 
 
@@ -67,14 +68,19 @@ uint32_t tcp_out_data(struct tcp_socket *tcp_socket, uint8_t *data, uint32_t dat
 
         tcp_segment->ack = 1;
 
-        buffer->payload_size = packet_len;
-
         memcpy(tcp_segment->data, data + (i * tcp_socket->mss), (size_t)packet_len);
+		buffer->payload_size = packet_len;
+
+		tcp_out_set_seqnums(tcp_socket, buffer);
+		tcp_out_header(tcp_socket, buffer);
+
+		// Advance snd_next
+		tcp_socket->snd_nxt += packet_len;
 
 		tcp_out_queue_push(tcp_socket, buffer);
     }
 
-	tcp_out_queue_pop(tcp_socket);
+	tcp_out_queue_send(tcp_socket);
 	return data_len;
 }
 
@@ -96,15 +102,11 @@ void tcp_out_queue_push(struct tcp_socket *tcp_socket, struct sk_buff *sk_buff) 
 	sk_buff->manual_free = 1;  // don't free() when calling eth_write()
 }
 
-void tcp_out_queue_pop(struct tcp_socket *tcp_socket) {
+void tcp_out_queue_send(struct tcp_socket *tcp_socket) {
 	struct tcp_buffer_queue_entry *entry = tcp_socket->out_queue_head;
 
 	while(entry != NULL && entry->sk_buff->payload_size < tcp_socket->snd_wnd) {
-		tcp_out_set_seqnums(tcp_socket, entry->sk_buff);
-		tcp_out_header(tcp_socket, entry->sk_buff);
-
 		tcp_out_send(tcp_socket, entry->sk_buff);
-		tcp_socket->snd_nxt += entry->sk_buff->payload_size;
 		tcp_socket->snd_wnd -= entry->sk_buff->payload_size;
 		tcp_socket->delayed_ack = 0;  // piggyback off
 
@@ -163,9 +165,12 @@ void tcp_out_syn(struct tcp_socket *tcp_socket) {
 	tcp_segment->data[1] = 4;
 	memcpy(&tcp_segment->data[2], &mss, 2);
 
+	// Header
+	tcp_out_header(tcp_socket, buffer);
+
 	// Send it
 	tcp_out_queue_push(tcp_socket, buffer);
-	tcp_out_queue_pop(tcp_socket);
+	tcp_out_queue_send(tcp_socket);
 
 	// Increase SND.NXT by 1
 	tcp_socket->snd_nxt++;

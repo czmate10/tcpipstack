@@ -51,16 +51,20 @@ void *tcp_timer_slow(void *args) {
 		list_for_each(list_item, &tcp_socket_list) {
 			tcp_socket = list_entry(list_item, struct tcp_socket, list);
 
-			if(tcp_socket == NULL || tcp_socket->state != TCPS_ESTABLISHED)
+			if(tcp_socket == NULL || (tcp_socket->state != TCPS_ESTABLISHED && tcp_socket->state != TCPS_SYN_SENT))
 				continue;
 
 			// Check if RTO expired
 			if(tcp_socket->rto_expires && tcp_socket->rto_expires < timer_ticks) {
+				if(tcp_socket->state == TCPS_SYN_SENT || tcp_socket->state == TCPS_SYN_RCVD) {
+					tcp_socket->cwnd = tcp_socket->mss;
+				}
+
 				tcp_socket->rto = min(tcp_socket->rto * 2, TCP_RTO_MAX);
 				tcp_socket->rto_expires = timer_ticks + tcp_socket->rto;
 
 				printf("Resending segment, RTO=%u\n", tcp_socket->rto);
-				tcp_out_queue_pop(tcp_socket);
+				tcp_out_queue_send(tcp_socket);
 			}
 		}
 
